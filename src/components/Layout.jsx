@@ -7,7 +7,7 @@ const linkClass = ({ isActive }) =>
   [
     'rounded-lg px-3 py-2 text-sm font-medium transition-colors',
     isActive
-      ? 'bg-blue-600 text-white'
+      ? 'bg-[#E38D28] text-white'
       : 'text-slate-400 hover:bg-slate-800 hover:text-white',
   ].join(' ')
 
@@ -21,8 +21,8 @@ export default function Layout() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-slate-800 bg-slate-900/90 backdrop-blur">
+    <div className="min-h-screen bg-[#3388AB]/5 text-slate-100">
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-[#3388AB]/70 bg-[#3388AB]/20 backdrop-blur">
         <div className="mx-auto max-w-350 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <NavLink to="/" onClick={closeMenu} className="flex items-center text-lg font-semibold tracking-tight text-white">
@@ -55,11 +55,6 @@ export default function Layout() {
                 </NavLink>
               )}
               {role === ROLES.ADMIN && (
-                <NavLink to="/admin/partners" className={linkClass} onClick={closeMenu}>
-                  Partner master
-                </NavLink>
-              )}
-              {role === ROLES.ADMIN && (
                 <NavLink to="/admin/statuses" className={linkClass} onClick={closeMenu}>
                   Status master
                 </NavLink>
@@ -74,22 +69,12 @@ export default function Layout() {
                   My leads
                 </NavLink>
               )}
-              {role === ROLES.PROCESS && (
-                <NavLink to="/process" className={linkClass} onClick={closeMenu}>
-                  Assigned leads
-                </NavLink>
-              )}
-              {role === ROLES.PARTNER && (
-                <NavLink to="/partner" className={linkClass} onClick={closeMenu}>
-                  Partner dashboard
-                </NavLink>
-              )}
             </nav>
             <div className="flex flex-wrap items-center gap-2 text-sm sm:gap-3">
               <span className="hidden text-slate-500 lg:inline">
                 {profile?.displayName ?? profile?.email}
               </span>
-              <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-xs font-medium text-blue-300">
+              <span className="rounded-full bg-[#E38D28]/10 px-2.5 py-0.5 text-xs font-medium text-[#E38D28]">
                 {ROLE_LABELS[role] ?? role}
               </span>
               <button
@@ -109,7 +94,7 @@ export default function Layout() {
       </header>
       {menuOpen && (
         <div className="fixed inset-x-0 top-16 z-40 px-3 sm:hidden">
-          <div className="mx-auto max-w-[1400px] space-y-3 rounded-xl border border-slate-800 bg-slate-900/95 p-3 shadow-2xl">
+          <div className="mx-auto max-w-350 space-y-3 rounded-xl border border-slate-800 bg-slate-900/95 p-3 shadow-2xl">
             <nav className="grid gap-1">
               {role === ROLES.ADMIN && (
                 <NavLink to="/admin/users" className={linkClass} onClick={closeMenu}>
@@ -119,11 +104,6 @@ export default function Layout() {
               {role === ROLES.ADMIN && (
                 <NavLink to="/admin/products" className={linkClass} onClick={closeMenu}>
                   Product master
-                </NavLink>
-              )}
-              {role === ROLES.ADMIN && (
-                <NavLink to="/admin/partners" className={linkClass} onClick={closeMenu}>
-                  Partner master
                 </NavLink>
               )}
               {role === ROLES.ADMIN && (
@@ -139,16 +119,6 @@ export default function Layout() {
               {role === ROLES.SALES && (
                 <NavLink to="/sales" className={linkClass} onClick={closeMenu}>
                   My leads
-                </NavLink>
-              )}
-              {role === ROLES.PROCESS && (
-                <NavLink to="/process" className={linkClass} onClick={closeMenu}>
-                  Assigned leads
-                </NavLink>
-              )}
-              {role === ROLES.PARTNER && (
-                <NavLink to="/partner" className={linkClass} onClick={closeMenu}>
-                  Partner dashboard
                 </NavLink>
               )}
             </nav>
@@ -170,7 +140,7 @@ export default function Layout() {
           </div>
         </div>
       )}
-      <main className="mx-auto max-w-[1400px] px-3 pb-5 pt-24 sm:px-4 sm:pb-8 sm:pt-28">
+      <main className="mx-auto max-w-350 px-3 pb-5 pt-24 sm:px-4 sm:pb-8 sm:pt-28">
         <Outlet />
       </main>
     </div>

@@ -17,7 +17,7 @@ export function assignableProcessUsers(processUsers, currentUid, usersById) {
   ]
 }
 
-export function labelAssignableProcessUser(u) {
+export function labelAssignableUser(u) {
   if (u.isSelfOption) {
     const name = u.displayName || u.email || 'you'
     return `Self (${name})`

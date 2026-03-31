@@ -63,85 +63,37 @@ export default function LeadDetailsModal({
         </div>
 
         <div className="max-h-[80vh] overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
-          <div className="grid gap-8 md:grid-cols-2">
-            <section className="space-y-3">
-              <p className="text-sm font-semibold text-slate-400">Lead Information</p>
-              {showPartner && <Row label="Partner" value={partnerName} />}
-              {lead.viaName ? (
-                <Row label="Via" value={lead.viaName} />
-              ) : null}
-              <Row label="Company" value={lead.company || '—'} />
-              <Row label="Client Name" value={lead.clientName || '—'} />
-              <Row label="Sales Owner" value={userName(lead.createdBy)} />
-              <Row label="Processed By" value={processedBy} />
-              {salesAssignedBy ? (
-                <Row label="Sales assigned" value={salesAssignedBy} />
-              ) : null}
-              <Row label="Status" value={statusLabel} />
-              <Row label="Date" value={lead.leadDate || '—'} />
-              <Row
-                label="Updated status date"
-                value={lead.updatedStatusDate || '—'}
-              />
-            </section>
-
-            <section className="space-y-3">
-              <p className="text-sm font-semibold text-slate-400">Company Details</p>
-              <Row label="Location" value={lead.location || '—'} />
-              {isPartnerRole ? null : (
-                <Row label="Bank Name" value={lead.bankName || '—'} />
-              )}
-              <Row label="Product" value={productName} />
-              {isPartnerRole ? null : (
-                <Row
-                  label="One Pager Link"
-                  value={lead.onePagerLink || 'N/A'}
-                  isLink={Boolean(lead.onePagerLink)}
-                />
-              )}
-            </section>
-            
-            <section className="space-y-3">
-              <p className="text-sm font-semibold text-slate-400">Financial Information</p>
-              <Row label="Requirement Amount" value={formatAmount(lead.totalAmount)} />
-              {isPartnerRole ? null : (
-                <>
-                  <Row label="Bank Payout %" value={formatPercent(lead.bankPayoutPercent)} />
-                  <Row label="Bank Payout Amount" value={formatAmount(lead.bankPayoutAmount)} />
-                </>
-              )}
-            </section>
-
-            {isPartnerRole ? null : (
-              <section className="space-y-3">
-                <p className="text-sm font-semibold text-slate-400">Revenue Details</p>
-                <Row label="Mandate Signed" value={lead.mandateSigned ? 'Yes' : 'No'} />
-                <Row
-                  label="Mandate Payout %"
-                  value={
-                    lead.mandateSigned
-                      ? formatPercent(lead.mandatePayoutPercent)
-                      : 'N/A'
-                  }
-                />
-                <Row
-                  label="Mandate Payout Amount"
-                  value={
-                    lead.mandateSigned ? formatAmount(lead.mandatePayoutAmount) : 'N/A'
-                  }
-                />
-                <Row
-                  label="Total Revenue"
-                  value={formatAmount(totalRevenue(lead))}
-                />
-              </section>
-            )}
-          </div>
+          <p className="text-sm font-semibold text-slate-400 mb-4">Lead Information</p>
+          <section className="space-y-3 grid grid-cols-2">
+            <Row label="Lead Date" value={lead.leadDate || '—'} />
+            <Row label="Client Name" value={lead.clientName || '—'} />
+            <Row label="Phone" value={lead.phone || '—'} />
+            <Row label="Email" value={lead.email || '—'} />
+            <Row label="Product" value={productName} />
+            <Row label="Lead Owner" value={userName(lead.createdBy)} />
+            <Row label="Processed By" value={processedBy} />
+            {salesAssignedBy ? (
+              <Row label="Sales assigned" value={salesAssignedBy} />
+            ) : null}
+            <Row label="Status" value={statusLabel} />
+            <Row label="Date" value={lead.leadDate || '—'} />
+            <Row
+              label="Updated status date"
+              value={lead.updatedStatusDate || '—'}
+            />
+          </section>
 
           <section className="mt-8">
             <p className="mb-2 text-sm font-semibold text-slate-400">Description</p>
             <div className="rounded-lg border border-slate-800 bg-slate-950/60 px-4 py-3 text-sm text-slate-200">
               {lead.description || '—'}
+            </div>
+          </section>
+
+          <section className="mt-8">
+            <p className="mb-2 text-sm font-semibold text-slate-400">Notes</p>
+            <div className="rounded-lg border border-slate-800 bg-slate-950/60 px-4 py-3 text-sm text-slate-200">
+              {lead.notes || '—'}
             </div>
           </section>
         </div>
@@ -168,25 +120,6 @@ function Row({ label, value, isLink = false }) {
       )}
     </div>
   )
-}
-
-function formatAmount(v) {
-  const num = Number(v)
-  if (!Number.isFinite(num)) return 'N/A'
-  return `₹${num.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
-}
-
-function formatPercent(v) {
-  if (v === '' || v == null) return 'N/A'
-  const num = Number(v)
-  if (!Number.isFinite(num)) return 'N/A'
-  return `${num}%`
-}
-
-function totalRevenue(lead) {
-  const bank = Number(lead.bankPayoutAmount) || 0
-  const mandate = Number(lead.mandatePayoutAmount) || 0
-  return bank + mandate
 }
 
 function getProductName(productId, products) {

@@ -2,17 +2,11 @@ import { useMemo, useState } from 'react'
 import { push, ref, set, remove } from 'firebase/database'
 import { useAuth } from '../context/AuthContext'
 import { useLeads } from '../hooks/useLeads'
-import { usePartners } from '../hooks/usePartners'
 import { useProducts } from '../hooks/useProducts'
 import { useStatuses } from '../hooks/useStatuses'
 import { useUsers } from '../hooks/useUsers'
 import { assignedUids, toAssignedMap } from '../lib/leads'
-import {
-  assignableProcessUsers,
-  assignableSalesUsers,
-  labelAssignableProcessUser,
-  processUserFilterOptions,
-} from '../lib/assignees'
+import { assignableProcessUsers, labelAssignableUser} from '../lib/assignees'
 import { downloadCsv, formatAmountForCsv, inDateRange } from '../lib/csv'
 import { db } from '../lib/firebase'
 import LeadDetailsModal from '../components/LeadDetailsModal'
@@ -22,51 +16,36 @@ import TypeaheadMultiSelect from '../components/TypeaheadMultiSelect'
 export default function ManagementBoard() {
   const { user,profile } = useAuth()
   const { leads, loading } = useLeads()
-  const { partners } = usePartners()
   const { products } = useProducts()
   const { statuses } = useStatuses()
   const { usersById, processUsers } = useUsers()
   const [statusFilter, setStatusFilter] = useState('')
   const [leadSearch, setLeadSearch] = useState('')
   const [salesOwnerFilter, setSalesOwnerFilter] = useState([])
-  const [processUserFilter, setProcessUserFilter] = useState([])
   const [productFilter, setProductFilter] = useState('')
-  const [partnerFilter, setPartnerFilter] = useState([])
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [sortBy, setSortBy] = useState('')
   const [sortOrder, setSortOrder] = useState('')
   const [viewLead, setViewLead] = useState(null)
-  const [partnerModalOpen, setPartnerModalOpen] = useState(false)
   const [leadModalOpen, setLeadModalOpen] = useState(false)
-  const [partnerName, setPartnerName] = useState('')
-  const [assignmentMode, setAssignmentMode] = useState('process')
   const [selectedAssignees, setSelectedAssignees] = useState([])
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false)
-  const [selectedSalesAssignees, setSelectedSalesAssignees] = useState([])
-  const [salesAssigneeDropdownOpen, setSalesAssigneeDropdownOpen] =
-    useState(false)
-  const [savingPartner, setSavingPartner] = useState(false)
   const [savingLead, setSavingLead] = useState(false)
   const [formError, setFormError] = useState('')
   const [deletingLeadId, setDeletingLeadId] = useState('')
   const [message, setMessage] = useState('')
   const [leadForm, setLeadForm] = useState({
-    partnerId: '',
-    company: '',
+    leadDate: '',
     clientName: '',
-    location: '',
-    bankName: '',
-    onePagerLink: '',
+    phone: '',
+    email: '',
+    city: '',
+    productId: '',
     description: '',
     status: '',
     updatedStatusDate: '',
-    productId: '',
-    leadDate: '',
-    totalAmount: '',
-    bankPayoutPercent: '',
-    mandateSigned: false,
-    mandatePayoutPercent: '',
+    notes: '',
   })
 
   const users = useMemo(
@@ -74,13 +53,13 @@ export default function ManagementBoard() {
     [usersById],
   )
 
-  const isManagement =
-    String(profile?.role ?? '').trim().toLowerCase() === 'management'
-
-  const salesUsers = useMemo(
+  const allUsers = useMemo(
     () =>
       users
-        .filter((u) => String(u?.role ?? '').trim().toLowerCase() === 'sales')
+        .filter((u) => {
+          const role = String(u?.role ?? '').trim().toLowerCase();
+          return role === 'management' || role === 'sales';
+        })
         .sort((a, b) =>
           String(a.displayName || a.email || '')
             .toLowerCase()
@@ -89,37 +68,18 @@ export default function ManagementBoard() {
     [users],
   )
 
-  const salesOwnerOptions = useMemo(
+  const allOwnerOptions = useMemo(
     () =>
-      salesUsers.map((u) => ({
+      allUsers.map((u) => ({
         id: u.uid,
         label: u.displayName || u.email || u.uid.slice(0, 8),
       })),
-    [salesUsers],
-  )
-
-  const processUserOptions = useMemo(
-    () => processUserFilterOptions(processUsers, user?.uid, usersById),
-    [processUsers, user?.uid, usersById],
+    [allUsers],
   )
 
   const processAssignees = useMemo(
     () => assignableProcessUsers(processUsers, user?.uid, usersById),
     [processUsers, user?.uid, usersById],
-  )
-
-  const salesAssignees = useMemo(
-    () => assignableSalesUsers(salesUsers, user?.uid, usersById),
-    [salesUsers, user?.uid, usersById],
-  )
-
-  const partnerOptions = useMemo(
-    () =>
-      partners.map((p) => ({
-        id: p.id,
-        label: p.name || p.id,
-      })),
-    [partners],
   )
 
   const statusOptions = useMemo(() => {
@@ -155,18 +115,11 @@ export default function ManagementBoard() {
     if (salesOwnerFilter.length) {
       list = list.filter((l) => salesOwnerFilter.includes(l.createdBy))
     }
-    if (processUserFilter.length) {
-      list = list.filter((l) => {
-        const assigned = assignedUids(l.assignedTo)
-        return processUserFilter.some((uid) => assigned.includes(uid))
-      })
-    }
+    
     if (productFilter) {
       list = list.filter((l) => l.productId === productFilter)
     }
-    if (partnerFilter.length) {
-      list = list.filter((l) => partnerFilter.includes(l.partnerId))
-    }
+    
     list = list.filter((l) => inDateRange(l.leadDate || '', fromDate, toDate))
     const sorted = [...list]
     if (sortBy && sortOrder) {
@@ -188,9 +141,7 @@ export default function ManagementBoard() {
     statusFilter,
     leadSearch,
     salesOwnerFilter,
-    processUserFilter,
     productFilter,
-    partnerFilter,
     fromDate,
     toDate,
     sortBy,
@@ -206,13 +157,6 @@ export default function ManagementBoard() {
     if (!productId) return '—'
     const p = products.find((item) => item.id === productId)
     return p?.name || productId
-  }
-
-  function partnerNameFor(partnerId, fallbackName = '') {
-    if (fallbackName) return fallbackName
-    if (!partnerId) return '—'
-    const p = partners.find((item) => item.id === partnerId)
-    return p?.name || partnerId
   }
 
   function formatCurrencyINR(value) {
@@ -251,112 +195,44 @@ export default function ManagementBoard() {
     )
   }
 
-  function toggleSalesAssignee(uid) {
-    setSelectedSalesAssignees((prev) =>
-      prev.includes(uid) ? prev.filter((x) => x !== uid) : [...prev, uid],
-    )
-  }
-
-  async function savePartner(e) {
-    e.preventDefault()
-    if (!user) return
-    const name = partnerName.trim()
-    if (!name) return
-    setSavingPartner(true)
-    setFormError('')
-    try {
-      const newRef = push(ref(db, 'partners'))
-      await set(newRef, {
-        name,
-        createdAt: Date.now(),
-        createdBy: user.uid,
-      })
-      setPartnerName('')
-      setPartnerModalOpen(false)
-    } catch (err) {
-      setFormError(err?.message || 'Could not add partner.')
-    } finally {
-      setSavingPartner(false)
-    }
-  }
-
   async function saveLeadByManagement(e) {
     e.preventDefault()
     if (!user) return
-    if (!leadForm.partnerId) {
-      setFormError('Please select a partner.')
-      return
-    }
     setSavingLead(true)
     setFormError('')
     try {
-      const partnerLabel = partnerNameFor(leadForm.partnerId, '')
-      const baseAmount = Number.parseFloat(leadForm.totalAmount || 0) || 0
-      const bankPercent = Number.parseFloat(leadForm.bankPayoutPercent || 0) || 0
-      const mandatePercent =
-        Number.parseFloat(leadForm.mandatePayoutPercent || 0) || 0
-      const bankPayoutAmount = (baseAmount * bankPercent) / 100
-      const mandatePayoutAmount = leadForm.mandateSigned
-        ? (baseAmount * mandatePercent) / 100
-        : 0
-
       const payload = {
-        partnerId: leadForm.partnerId,
-        partnerName: partnerLabel,
-        company: leadForm.company.trim() || partnerLabel,
-        clientName: leadForm.clientName.trim(),
-        location: leadForm.location.trim(),
-        bankName: leadForm.bankName.trim(),
-        onePagerLink: leadForm.onePagerLink.trim(),
         leadDate: leadForm.leadDate || '',
+        clientName: leadForm.clientName.trim(),
+        phone: leadForm.phone.trim(),
+        email: leadForm.email.trim(),
+        city: leadForm.city.trim(),
         description: leadForm.description.trim(),
         status: leadForm.status || '',
         updatedStatusDate: leadForm.updatedStatusDate || '',
         createdBy: user.uid,
-        assignedTo:
-          assignmentMode === 'process'
-            ? toAssignedMap(selectedAssignees)
-            : null,
-        salesAssignedTo:
-          assignmentMode === 'sales'
-            ? toAssignedMap(selectedSalesAssignees)
-            : null,
+        notes: leadForm.notes,
+        assignedTo: toAssignedMap(selectedAssignees),
         productId: leadForm.productId || null,
-        totalAmount: leadForm.totalAmount || '',
-        bankPayoutPercent: leadForm.bankPayoutPercent || '',
-        bankPayoutAmount: Number(bankPayoutAmount.toFixed(2)),
-        mandateSigned: Boolean(leadForm.mandateSigned),
-        mandatePayoutPercent: leadForm.mandateSigned
-          ? leadForm.mandatePayoutPercent || ''
-          : '',
-        mandatePayoutAmount: Number(mandatePayoutAmount.toFixed(2)),
         updatedAt: Date.now(),
         createdAt: Date.now(),
       }
       const newRef = push(ref(db, 'leads'))
       await set(newRef, payload)
       setLeadForm({
-        partnerId: '',
-        company: '',
+        leadDate: '',
         clientName: '',
-        location: '',
-        bankName: '',
-        onePagerLink: '',
+        phone: '',
+        email: '',
+        city: '',
+        productId: '',
         description: '',
         status: '',
         updatedStatusDate: '',
-        productId: '',
-        leadDate: '',
-        totalAmount: '',
-        bankPayoutPercent: '',
-        mandateSigned: false,
-        mandatePayoutPercent: '',
+        notes: '',
       })
-      setAssignmentMode('process')
       setSelectedAssignees([])
       setAssigneeDropdownOpen(false)
-      setSelectedSalesAssignees([])
-      setSalesAssigneeDropdownOpen(false)
       setLeadModalOpen(false)
     } catch (err) {
       setFormError(err?.message || 'Could not create lead.')
@@ -365,45 +241,35 @@ export default function ManagementBoard() {
     }
   }
 
-  const baseAmount = Number.parseFloat(leadForm.totalAmount || 0) || 0
-  const bankPercent = Number.parseFloat(leadForm.bankPayoutPercent || 0) || 0
-  const mandatePercent = Number.parseFloat(leadForm.mandatePayoutPercent || 0) || 0
-  const bankAmount = (baseAmount * bankPercent) / 100
-  const mandateAmount = leadForm.mandateSigned
-    ? (baseAmount * mandatePercent) / 100
-    : 0
-  const totalRevenue = bankAmount + mandateAmount
-
   function exportCsv() {
     const rows = filtered
       .filter((lead) => inDateRange(lead.leadDate || '', fromDate, toDate))
       .map((lead) => [
-        partnerNameFor(lead.partnerId, lead.partnerName),
-        lead.company || '',
+        lead.clientName || '',
+        lead.leadDate || '',
+        lead.phone || '',
+        lead.email || '',
+        lead.city || '',
         lead.status || '',
+        lead.updatedStatusDate || '',
         productNameFor(lead.productId),
         nameFor(lead.createdBy),
         assignedUids(lead.assignedTo).map((uid) => nameFor(uid)).join(', '),
-        formatAmountForCsv(lead.totalAmount),
-        formatAmountForCsv(
-          (Number(lead.bankPayoutAmount) || 0) +
-            (Number(lead.mandatePayoutAmount) || 0),
-        ),
-        lead.leadDate || '',
       ])
 
     downloadCsv(
       'management-leads.csv',
       [
-        'Partner',
-        'Company',
-        'Status',
-        'Product',
-        'Sales Owner',
-        'Process Team',
-        'Required Amount',
-        'Total Revenue',
+        'Client',
         'Lead Date',
+        'Phone',
+        'Email',
+        'City',
+        'Status',
+        'Updated Status Date',
+        'Product',
+        'Lead Holder',
+        'Assigned To',
       ],
       rows,
     )
@@ -449,13 +315,10 @@ export default function ManagementBoard() {
               <button type="button"
                 onClick={() => {
                   setFormError('')
-                  setAssignmentMode('process')
                   setSelectedAssignees([])
-                  setSelectedSalesAssignees([])
                   setAssigneeDropdownOpen(false)
-                  setSalesAssigneeDropdownOpen(false)
                   setLeadModalOpen(true)
-                }} className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-500"
+                }} className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#3388AB]"
               >
                 New lead
               </button>
@@ -496,26 +359,9 @@ export default function ManagementBoard() {
               id="sales-owner-filter"
               label={null}
               placeholder="Type sales owner…"
-              options={salesOwnerOptions}
+              options={allOwnerOptions}
               selectedIds={salesOwnerFilter}
               onChangeSelectedIds={setSalesOwnerFilter}
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="process-user-filter"
-              className="block text-xs font-medium uppercase tracking-wide text-slate-500"
-            >
-              Process team user
-            </label>
-            <TypeaheadMultiSelect
-              id="process-user-filter"
-              label={null}
-              placeholder="Type process user…"
-              options={processUserOptions}
-              selectedIds={processUserFilter}
-              onChangeSelectedIds={setProcessUserFilter}
             />
           </div>
 
@@ -540,25 +386,6 @@ export default function ManagementBoard() {
               ))}
             </select>
           </div>
-
-          <div>
-            <label
-              htmlFor="partner-filter"
-              className="block text-xs font-medium uppercase tracking-wide text-slate-500"
-            >
-              Partner
-            </label>
-            <TypeaheadMultiSelect
-              id="partner-filter"
-              label={null}
-              placeholder="Type partner…"
-              options={partnerOptions}
-              selectedIds={partnerFilter}
-              onChangeSelectedIds={setPartnerFilter}
-            />
-          </div>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <div>
             <label className="block text-xs font-medium uppercase tracking-wide text-slate-500">
               From
@@ -581,6 +408,9 @@ export default function ManagementBoard() {
               className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"
             />
           </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div className='col-span-3'></div>
           <div className="flex items-end">
             <button
               type="button"
@@ -590,7 +420,6 @@ export default function ManagementBoard() {
               Export CSV
             </button>
           </div>
-          <div></div>
           <div>
             <label
               htmlFor="search-company-management"
@@ -604,7 +433,7 @@ export default function ManagementBoard() {
               value={leadSearch}
               onChange={(e) => setLeadSearch(e.target.value)}
               placeholder="Type company name..."
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500 outline-none focus:border-[#3388AB] focus:ring-2 focus:ring-[#3388AB]/30"
             />
           </div>
         </div>
@@ -615,34 +444,11 @@ export default function ManagementBoard() {
           <table className="min-w-max w-full text-left text-xs sm:text-sm">
             <thead className="border-b border-slate-800 bg-slate-900/80 text-xs uppercase text-slate-500">
               <tr>
-                <th className="px-4 py-2 font-medium">Partner</th>
-                <th className="px-4 py-2 font-medium">Company</th>
+                <th className="px-4 py-2 font-medium">Client</th>
                 <th className="px-4 py-2 font-medium">Status</th>
                 <th className="px-4 py-2 font-medium">Product</th>
-                <th className="px-4 py-2 font-medium">Sales owner</th>
-                <th className="px-4 py-2 font-medium">Process team</th>
-                <th className="px-4 py-2 font-medium text-right">
-                  <button
-                    type="button"
-                    onClick={() => toggleSort('requiredAmount')}
-                    className="inline-flex items-center gap-1 text-right hover:text-slate-300"
-                    title="Sort required amount"
-                  >
-                    Required Amount
-                    <span>{sortIndicator('requiredAmount')}</span>
-                  </button>
-                </th>
-                <th className="px-4 py-2 font-medium text-right">
-                  <button
-                    type="button"
-                    onClick={() => toggleSort('revenue')}
-                    className="inline-flex items-center gap-1 text-right hover:text-slate-300"
-                    title="Sort total revenue"
-                  >
-                    Total Revenue
-                    <span>{sortIndicator('revenue')}</span>
-                  </button>
-                </th>
+                <th className="px-4 py-2 font-medium">Lead Holder</th>
+                <th className="px-4 py-2 font-medium">Assigned To</th>
                 <th className="px-4 py-2 font-medium">Lead Date</th>
                 <th className="px-4 py-2 font-medium">Updated status date</th>
                 <th className="px-4 py-2 font-medium">View details</th>
@@ -663,8 +469,7 @@ export default function ManagementBoard() {
                   const assignees = assignedUids(lead.assignedTo)
                   return (
                     <tr key={lead.id} className="text-slate-300">
-                      <td className="px-4 py-1">{partnerNameFor(lead.partnerId, lead.partnerName)}</td>
-                      <td className="px-4 py-1 text-slate-400">{lead.company || '—'}</td>
+                      <td className="px-4 py-1 text-slate-400">{lead.clientName || '—'}</td>
                       <td className="px-4 py-1">
                         <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-xs text-blue-300">
                           {statusLabelByValue.get(lead.status) ||
@@ -680,26 +485,17 @@ export default function ManagementBoard() {
                         {assignees.length === 0 ? (
                           <span className="text-slate-600">Unassigned</span>
                         ) : (
-                          <ul className="space-y-0.5 text-xs text-slate-400">
+                          <ul className="space-y-0.5 text-sm text-slate-400">
                             {assignees.map((uid) => (
                               <li key={uid}>{nameFor(uid)}</li>
                             ))}
                           </ul>
                         )}
                       </td>
-                      <td className="px-4 py-1 text-slate-400 text-right">
-                        {formatCurrencyINR(lead?.totalAmount)}
-                      </td>
-                      <td className="px-4 py-1 text-slate-400 text-right">
-                        {formatCurrencyINR(
-                          (Number(lead?.bankPayoutAmount) || 0) +
-                            (Number(lead?.mandatePayoutAmount) || 0),
-                        )}
-                      </td>
                       <td className="px-4 py-1 text-xs text-slate-500">{lead.leadDate || '—'}</td>
                       <td className="px-4 py-1 text-xs text-slate-500">{lead.updatedStatusDate || '—'}</td>
                       <td className="px-4 py-1">
-                        <div className="flex items-center gap-2 justify-end">
+                        <div className="flex items-center gap-2 justify-start">
                           <div>
                             <button
                               type="button"
@@ -713,7 +509,7 @@ export default function ManagementBoard() {
                             <button
                               type="button"
                               onClick={() => handleDelete(lead.id)}
-                              disabled={!isManagement ||deletingLeadId === lead.id}
+                              disabled={deletingLeadId === lead.id}
                               className="rounded-lg border border-red-800/40 px-4 py-1 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50"
                             >
                               {deletingLeadId === lead.id ? 'Deleting...' : 'Delete'}
@@ -736,43 +532,6 @@ export default function ManagementBoard() {
           usersById={usersById}
           onClose={() => setViewLead(null)}
         />
-      )}
-
-      {partnerModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-2xl">
-            <h2 className="text-lg font-semibold text-white">Add partner</h2>
-            <form onSubmit={savePartner} className="mt-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-300">
-                  Partner name
-                </label>
-                <input
-                  value={partnerName}
-                  onChange={(e) => setPartnerName(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
-                />
-              </div>
-              {formError && <p className="text-sm text-red-300">{formError}</p>}
-              <div className="flex justify-end gap-2">
-                <div>
-                  <button type="button" onClick={() => setPartnerModalOpen(false)} className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-                    Cancel
-                  </button>
-                </div>
-                <div>
-                  <button
-                    type="submit"
-                    disabled={savingPartner}
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
-                  >
-                    {savingPartner ? 'Saving...' : 'Save partner'}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
       )}
 
       {leadModalOpen && (
@@ -890,19 +649,30 @@ export default function ManagementBoard() {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-slate-300">Notes</label>
+                <textarea
+                  rows={3}
+                  value={leadForm.notes}
+                  onChange={(e) =>
+                    setLeadForm((f) => ({ ...f, notes: e.target.value }))
+                  }
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                />
+              </div>
+              <div>
                 <label className="text-sm font-medium text-slate-300">Assign to</label>
                 <div className="relative mt-2">
                   <button
                     type="button"
                     onClick={() =>
-                      processAssignees.length > 0 &&
+                      salesAssignees.length > 0 &&
                       setAssigneeDropdownOpen((v) => !v)
                     }
                     className="flex w-full items-center justify-between rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-left text-sm text-white disabled:opacity-60"
-                    disabled={processAssignees.length === 0}
+                    disabled={salesAssignees.length === 0}
                   >
                     <span className="truncate">
-                      {processAssignees.length === 0
+                      {salesAssignees.length === 0
                         ? 'No process users found'
                         : selectedAssignees.length === 0
                           ? 'Select process users'
@@ -912,9 +682,9 @@ export default function ManagementBoard() {
                       {assigneeDropdownOpen ? '▲' : '▼'}
                     </span>
                   </button>
-                  {assigneeDropdownOpen && processAssignees.length > 0 && (
+                  {assigneeDropdownOpen && salesAssignees.length > 0 && (
                     <div className="absolute bottom-full left-0 z-20 mb-2 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-2 shadow-xl">
-                      {processAssignees.map((u) => (
+                      {salesAssignees.map((u) => (
                         <label
                           key={u.uid}
                           className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
@@ -925,7 +695,7 @@ export default function ManagementBoard() {
                             onChange={() => toggleAssignee(u.uid)}
                             className="rounded border-slate-600 bg-slate-950 text-blue-600"
                           />
-                          <span>{labelAssignableProcessUser(u)}</span>
+                          <span>{labelAssignableUser(u)}</span>
                         </label>
                       ))}
                     </div>
@@ -938,28 +708,19 @@ export default function ManagementBoard() {
                   type="button"
                   onClick={() => {
                     setLeadModalOpen(false)
-                    setAssigneeDropdownOpen(false)
-                    setSalesAssigneeDropdownOpen(false)
-                    setAssignmentMode('process')
                     setLeadForm({
-                      partnerId: '',
-                      company: '',
+                      leadDate: '',
                       clientName: '',
-                      location: '',
-                      bankName: '',
-                      onePagerLink: '',
+                      phone: '',
+                      email: '',
+                      city: '',
+                      productId: '',
                       description: '',
                       status: '',
                       updatedStatusDate: '',
-                      productId: '',
-                      leadDate: '',
-                      totalAmount: '',
-                      bankPayoutPercent: '',
-                      mandateSigned: false,
-                      mandatePayoutPercent: '',
+                      notes: '',
                     })
                     setSelectedAssignees([])
-                    setSelectedSalesAssignees([])
                   }}
                   className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
                 >
@@ -968,7 +729,7 @@ export default function ManagementBoard() {
                 <button
                   type="submit"
                   disabled={savingLead}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-[#3388AB] disabled:opacity-50"
                 >
                   {savingLead ? 'Saving...' : 'Save lead'}
                 </button>

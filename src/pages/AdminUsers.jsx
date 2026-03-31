@@ -291,7 +291,7 @@ export default function AdminUsers() {
             <button
               type="submit"
               disabled={submitting || !isAdmin}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+              className="rounded-lg bg-[#3388AB] px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
             >
               {submitting ? 'Creating...' : 'Create user'}
             </button>
@@ -483,7 +483,7 @@ export default function AdminUsers() {
                 <button
                   type="submit"
                   disabled={!isAdmin || savingEdit}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+                  className="rounded-lg bg-[#3388AB] px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
                 >
                   {savingEdit ? 'Saving…' : 'Save changes'}
                 </button>

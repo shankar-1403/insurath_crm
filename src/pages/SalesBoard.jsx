@@ -10,7 +10,7 @@ import { assignedUids, toAssignedMap } from '../lib/leads'
 import {
   assignableProcessUsers,
   assignableSalesUsers,
-  labelAssignableProcessUser,
+  labelAssignableUser
 } from '../lib/assignees'
 import { downloadCsv, formatAmountForCsv, inDateRange } from '../lib/csv'
 import LeadDetailsModal from '../components/LeadDetailsModal'
@@ -78,7 +78,6 @@ export default function SalesBoard() {
     let list = myLeads
     if (term) {
       list = list.filter((l) => {
-        const company = String(l.company ?? '').toLowerCase()
         const clientName = String(l.clientName ?? '').toLowerCase()
         return company.includes(term) || clientName.includes(term)
       })
@@ -318,7 +317,7 @@ export default function SalesBoard() {
           </p>
         </div>
         <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-end sm:gap-4">
-          <div className="w-full sm:w-[260px]">
+          <div className="w-full sm:w-65">
             <label
               htmlFor="search-company-sales"
               className="block text-xs font-medium uppercase tracking-wide text-slate-500"
@@ -331,7 +330,7 @@ export default function SalesBoard() {
               value={leadSearch}
               onChange={(e) => setLeadSearch(e.target.value)}
               placeholder="Type company name..."
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 outline-none focus:border-[#3388AB] focus:ring-2 focus:ring-[#3388AB]/30"
             />
           </div>
 
@@ -369,7 +368,7 @@ export default function SalesBoard() {
           <button
             type="button"
             onClick={openNew}
-            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-500"
+            className="rounded-lg bg-[#3388AB] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#3388AB]"
           >
             New lead
           </button>
@@ -487,7 +486,7 @@ export default function SalesBoard() {
                           ...(e.target.checked ? {} : { viaName: '' }),
                         }))
                       }
-                      className="rounded border-slate-600 bg-slate-950 text-blue-600"
+                      className="rounded border-slate-600 bg-slate-950 text-[#3388AB]"
                     />
                     <span>Via</span>
                   </label>
@@ -802,7 +801,7 @@ export default function SalesBoard() {
                     }}
                     className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                       assignmentMode === 'process'
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-[#3388AB] text-white'
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
@@ -817,7 +816,7 @@ export default function SalesBoard() {
                     }}
                     className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                       assignmentMode === 'sales'
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-[#3388AB] text-white'
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
@@ -868,9 +867,9 @@ export default function SalesBoard() {
                                 type="checkbox"
                                 checked={selectedAssignees.includes(u.uid)}
                                 onChange={() => toggleAssignee(u.uid)}
-                                className="rounded border-slate-600 bg-slate-950 text-blue-600"
+                                className="rounded border-slate-600 bg-slate-950 text-[#3388AB]"
                               />
-                              <span>{labelAssignableProcessUser(u)}</span>
+                              <span>{labelAssignableUser(u)}</span>
                             </label>
                           ))}
                         </div>
@@ -919,10 +918,10 @@ export default function SalesBoard() {
                                   onChange={() =>
                                     toggleSalesAssignee(u.uid)
                                   }
-                                  className="rounded border-slate-600 bg-slate-950 text-blue-600"
+                                  className="rounded border-slate-600 bg-slate-950 text-[#3388AB]"
                                 />
                                 <span>
-                                  {labelAssignableProcessUser(u)}
+                                  {labelAssignableUser(u)}
                                 </span>
                               </label>
                             ))}
@@ -944,7 +943,7 @@ export default function SalesBoard() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+                  className="rounded-lg bg-[#3388AB] px-4 py-2 text-sm font-semibold text-white hover:bg-[#3388AB] disabled:opacity-50"
                 >
                   {saving ? 'Saving…' : 'Save'}
                 </button>

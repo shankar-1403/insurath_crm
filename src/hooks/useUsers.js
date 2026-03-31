@@ -35,7 +35,7 @@ export function useUsers() {
       const role = String(u?.role ?? '')
         .trim()
         .toLowerCase()
-      return role === ROLES.PROCESS
+      return role === ROLES.SALES || role === ROLES.MANAGEMENT
     })
     .map(([uid, u]) => ({ uid, ...u }))
 

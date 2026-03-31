@@ -90,17 +90,6 @@ export default function AdminProducts() {
         </p>
       </div>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 text-sm">
-        <p className="text-slate-400">
-          Current UID:{' '}
-          <code className="font-mono text-blue-300">{user?.uid || '—'}</code>
-        </p>
-        <p className="mt-1 text-slate-400">
-          Current role:{' '}
-          <code className="text-blue-300">{profile?.role || 'missing'}</code>
-        </p>
-      </section>
-
       <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
         <h2 className="text-lg font-medium text-white">Add product</h2>
 
@@ -130,7 +119,7 @@ export default function AdminProducts() {
             <button
               type="submit"
               disabled={!isAdmin || submitting}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+              className="rounded-lg bg-[#3388AB] px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
             >
               {submitting ? 'Adding...' : 'Add product'}
             </button>
@@ -140,7 +129,7 @@ export default function AdminProducts() {
 
       <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/40">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] table-auto text-left text-xs sm:text-sm">
+          <table className="w-full min-w-180 table-auto text-left text-xs sm:text-sm">
             <thead className="border-b border-slate-800 bg-slate-900/80 text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3 font-medium whitespace-nowrap">Product</th>

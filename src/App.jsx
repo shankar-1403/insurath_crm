@@ -9,7 +9,6 @@ import SalesBoard from './pages/SalesBoard'
 import ProcessBoard from './pages/ProcessBoard'
 import AdminUsers from './pages/AdminUsers'
 import AdminProducts from './pages/AdminProducts'
-import AdminPartners from './pages/AdminPartners'
 import AdminStatuses from './pages/AdminStatuses'
 import PartnerBoard from './pages/PartnerBoard'
 import { ROLES } from './constants'
@@ -42,14 +41,6 @@ export default function App() {
               element={
                 <ProtectedRoute roles={[ROLES.ADMIN]}>
                   <AdminProducts />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin/partners"
-              element={
-                <ProtectedRoute roles={[ROLES.ADMIN]}>
-                  <AdminPartners />
                 </ProtectedRoute>
               }
             />
