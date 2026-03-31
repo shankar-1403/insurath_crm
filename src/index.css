@@ -1,0 +1,114 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --color-surface: #05070d;
+  --color-surface-elevated: #0a1222;
+  --color-border-subtle: #193453;
+  --color-accent: #0c5c8a;
+  --color-accent-hover: #0f6da3;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  background: #05070d;
+  color: #d5deea;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Brand palette overrides (blue + red on deep black) */
+.bg-slate-950 {
+  background-color: #05070d !important;
+}
+.bg-slate-900,
+.bg-slate-900\/50,
+.bg-slate-900\/80 {
+  background-color: #0a1222 !important;
+}
+.bg-slate-800 {
+  background-color: #112239 !important;
+}
+.border-slate-800,
+.border-slate-700,
+.border-slate-600 {
+  border-color: #1b3d61 !important;
+}
+.text-slate-100,
+.text-slate-200,
+.text-white {
+  color: #e8eef7 !important;
+}
+.text-slate-300,
+.text-slate-400,
+.text-slate-500 {
+  color: #9fb5cc !important;
+}
+.bg-blue-600 {
+  background-color: #0f5f8e !important;
+}
+.hover\:bg-blue-500:hover {
+  background-color: #1478b2 !important;
+}
+.text-blue-300,
+.text-blue-400 {
+  color: #3ca0d8 !important;
+}
+.focus\:border-blue-500:focus {
+  border-color: #3ca0d8 !important;
+}
+.focus\:ring-blue-500\/30:focus {
+  --tw-ring-color: rgb(60 160 216 / 0.3) !important;
+}
+.bg-red-950\/50 {
+  background-color: rgb(131 18 36 / 0.45) !important;
+}
+.text-red-300 {
+  color: #f2a1ad !important;
+}
+
+/*
+ * Dark UI: browser default calendar/clock icons stay black on dark inputs.
+ * WebKit: paint a light SVG over the indicator. Firefox: ::-moz-calendar-picker-indicator.
+ */
+input[type='date'],
+input[type='datetime-local'],
+input[type='time'] {
+  color-scheme: dark;
+}
+
+/* Light calendar/clock icon (stroke #b8c9dc) */
+input[type='date']::-webkit-calendar-picker-indicator,
+input[type='datetime-local']::-webkit-calendar-picker-indicator,
+input[type='time']::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  width: 1rem;
+  height: 1rem;
+  opacity: 1;
+  filter: none;
+  background: center / contain no-repeat
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23b8c9dc' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E");
+}
+
+input[type='time']::-webkit-calendar-picker-indicator {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23b8c9dc' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 6v6l4 2'/%3E%3C/svg%3E");
+}
+
+input[type='date']::-moz-calendar-picker-indicator,
+input[type='datetime-local']::-moz-calendar-picker-indicator {
+  cursor: pointer;
+  width: 1rem;
+  height: 1rem;
+  opacity: 1;
+  background: center / contain no-repeat
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23b8c9dc' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E");
+}

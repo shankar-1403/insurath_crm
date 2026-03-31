@@ -1,0 +1,26 @@
+{
+  "rules": {
+    "users": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && (auth.uid === $uid || root.child('users/' + auth.uid + '/role').val() === 'admin')"
+      }
+    },
+    "leads": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "products": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('users/' + auth.uid + '/role').val() === 'admin'"
+    },
+    "statuses": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('users/' + auth.uid + '/role').val() === 'admin'"
+    },
+    "partners": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}
