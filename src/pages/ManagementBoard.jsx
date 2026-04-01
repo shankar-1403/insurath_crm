@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { push, ref, set, remove } from 'firebase/database'
 import { useAuth } from '../context/AuthContext'
 import { useLeads } from '../hooks/useLeads'
@@ -7,14 +8,20 @@ import { useStatuses } from '../hooks/useStatuses'
 import { useUsers } from '../hooks/useUsers'
 import { assignedUids, toAssignedMap } from '../lib/leads'
 import { assignableProcessUsers, labelAssignableUser} from '../lib/assignees'
-import { downloadCsv, formatAmountForCsv, inDateRange } from '../lib/csv'
+import { downloadCsv, inDateRange } from '../lib/csv'
+import { resolveStatusLabel } from '../lib/statusLabel'
 import { db } from '../lib/firebase'
 import LeadDetailsModal from '../components/LeadDetailsModal'
-import AmountInWordsHint from '../components/AmountInWordsHint'
 import TypeaheadMultiSelect from '../components/TypeaheadMultiSelect'
+import { IconX } from '@tabler/icons-react'
 
 export default function ManagementBoard() {
-  const { user,profile } = useAuth()
+  const location = useLocation()
+  const path = location.pathname.replace(/\/$/, '') || '/'
+  const listTab = path === '/management/assigned' ? 'assigned' : 'all'
+
+  const prevListTabRef = useRef(null)
+  const { user } = useAuth()
   const { leads, loading } = useLeads()
   const { products } = useProducts()
   const { statuses } = useStatuses()
@@ -47,6 +54,23 @@ export default function ManagementBoard() {
     updatedStatusDate: '',
     notes: '',
   })
+
+  useEffect(() => {
+    if (
+      prevListTabRef.current !== null &&
+      prevListTabRef.current !== listTab
+    ) {
+      setStatusFilter('')
+      setLeadSearch('')
+      setSalesOwnerFilter([])
+      setProductFilter('')
+      setFromDate('')
+      setToDate('')
+      setSortBy('')
+      setSortOrder('')
+    }
+    prevListTabRef.current = listTab
+  }, [listTab])
 
   const users = useMemo(
     () => Object.entries(usersById).map(([uid, user]) => ({ uid, ...user })),
@@ -102,6 +126,9 @@ export default function ManagementBoard() {
   const filtered = useMemo(() => {
     const term = leadSearch.trim().toLowerCase()
     let list = leads
+    if (listTab === 'assigned' && user?.uid) {
+      list = list.filter((l) => assignedUids(l.assignedTo).includes(user.uid))
+    }
     if (statusFilter) {
       list = list.filter((l) => l.status === statusFilter)
     }
@@ -138,6 +165,8 @@ export default function ManagementBoard() {
     return sorted
   }, [
     leads,
+    listTab,
+    user?.uid,
     statusFilter,
     leadSearch,
     salesOwnerFilter,
@@ -157,36 +186,6 @@ export default function ManagementBoard() {
     if (!productId) return '—'
     const p = products.find((item) => item.id === productId)
     return p?.name || productId
-  }
-
-  function formatCurrencyINR(value) {
-    if (value === '' || value == null) return '—'
-    const amount = Number(value)
-    if (!Number.isFinite(amount)) return '—'
-    return `₹ ${amount.toLocaleString('en-IN')}`
-  }
-
-  function toggleSort(field) {
-    if (sortBy !== field) {
-      setSortBy(field)
-      setSortOrder('asc')
-      return
-    }
-    if (sortOrder === 'asc') {
-      setSortOrder('desc')
-      return
-    }
-    if (sortOrder === 'desc') {
-      setSortBy('')
-      setSortOrder('')
-      return
-    }
-    setSortOrder('asc')
-  }
-
-  function sortIndicator(field) {
-    if (sortBy !== field || !sortOrder) return '↕'
-    return sortOrder === 'asc' ? '↑' : '↓'
   }
 
   function toggleAssignee(uid) {
@@ -250,7 +249,7 @@ export default function ManagementBoard() {
         lead.phone || '',
         lead.email || '',
         lead.city || '',
-        lead.status || '',
+        resolveStatusLabel(lead.status, statuses),
         lead.updatedStatusDate || '',
         productNameFor(lead.productId),
         nameFor(lead.createdBy),
@@ -258,7 +257,9 @@ export default function ManagementBoard() {
       ])
 
     downloadCsv(
-      'management-leads.csv',
+      listTab === 'assigned'
+        ? 'management-assigned-leads.csv'
+        : 'management-leads.csv',
       [
         'Client',
         'Lead Date',
@@ -283,9 +284,7 @@ export default function ManagementBoard() {
     setMessage('')
     setFormError('')
     
-    const ok = window.confirm(
-      `Delete lead? Partner users linked to this ID will stop matching leads until updated.`,
-    )
+    const ok = window.confirm('Delete this lead? This cannot be undone.')
     if (!ok) return
 
     setDeletingLeadId(leadId)
@@ -302,11 +301,15 @@ export default function ManagementBoard() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4">
-        <div className="flex justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-white">All leads</h1>
+        <div className="flex justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl font-semibold text-white">
+              {listTab === 'assigned' ? 'Assigned leads' : 'All leads'}
+            </h1>
             <p className="mt-1 text-sm text-slate-400">
-              Track every lead, owner, assignment, and status across teams.
+              {listTab === 'assigned'
+                ? 'Leads assigned to you—including by other management users—using Assign to.'
+                : 'Track every lead, owner, assignment, and status across teams.'}
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-4">
@@ -318,7 +321,7 @@ export default function ManagementBoard() {
                   setSelectedAssignees([])
                   setAssigneeDropdownOpen(false)
                   setLeadModalOpen(true)
-                }} className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#3388AB]"
+                }} className="rounded-lg bg-[#3388AB] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#3388AB] cursor-pointer"
               >
                 New lead
               </button>
@@ -337,7 +340,7 @@ export default function ManagementBoard() {
               id="status-filter"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-900 px-3 py-2 text-sm text-white"
             >
               <option value="">All statuses</option>
               {statusOptions.filter((s) => s.value).map((s) => (
@@ -349,12 +352,7 @@ export default function ManagementBoard() {
           </div>
 
           <div>
-            <label
-              htmlFor="sales-owner-filter"
-              className="block text-xs font-medium uppercase tracking-wide text-slate-500"
-            >
-              Sales owner
-            </label>
+            <label htmlFor="sales-owner-filter" className="block text-xs font-medium uppercase tracking-wide text-slate-500">Lead Holder</label>
             <TypeaheadMultiSelect
               id="sales-owner-filter"
               label={null}
@@ -376,7 +374,7 @@ export default function ManagementBoard() {
               id="product-filter"
               value={productFilter}
               onChange={(e) => setProductFilter(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-900 px-3 py-2 text-sm text-white"
             >
               <option value="">All products</option>
               {products.map((p) => (
@@ -394,7 +392,7 @@ export default function ManagementBoard() {
               type="date"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-900 px-3 py-2 text-sm text-white"
             />
           </div>
           <div>
@@ -405,7 +403,7 @@ export default function ManagementBoard() {
               type="date"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-900 px-3 py-2 text-sm text-white"
             />
           </div>
         </div>
@@ -415,34 +413,34 @@ export default function ManagementBoard() {
             <button
               type="button"
               onClick={exportCsv}
-              className="w-full rounded-lg border border-slate-600 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800"
+              className="w-full rounded-lg border border-green-800 bg-green-800/20 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-green-800/10 cursor-pointer"
             >
               Export CSV
             </button>
           </div>
           <div>
             <label
-              htmlFor="search-company-management"
+              htmlFor="search"
               className="block text-xs font-medium uppercase tracking-wide text-slate-500"
             >
-              Search company
+              Search Client
             </label>
             <input
-              id="search-company-management"
+              id="search"
               type="text"
               value={leadSearch}
               onChange={(e) => setLeadSearch(e.target.value)}
-              placeholder="Type company name..."
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500 outline-none focus:border-[#3388AB] focus:ring-2 focus:ring-[#3388AB]/30"
+              placeholder="Type client name..."
+              className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500 outline-none focus:border-[#3388AB] focus:ring-2 focus:ring-[#3388AB]/30"
             />
           </div>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/40">
+      <div className="overflow-hidden rounded-xl border border-[#3388AB] bg-slate-900/40">
         <div className="overflow-x-auto">
           <table className="min-w-max w-full text-left text-xs sm:text-sm">
-            <thead className="border-b border-slate-800 bg-slate-900/80 text-xs uppercase text-slate-500">
+            <thead className="border-b border-[#3388AB] bg-slate-900/80 text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-2 font-medium">Client</th>
                 <th className="px-4 py-2 font-medium">Status</th>
@@ -454,14 +452,16 @@ export default function ManagementBoard() {
                 <th className="px-4 py-2 font-medium">View details</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800">
+            <tbody className="divide-y divide-[#3388AB]">
               {filtered.length === 0 ? (
                 <tr>
                   <td
                     colSpan={11}
                     className="px-4 py-10 text-center text-slate-500"
                   >
-                    No leads match this filter.
+                    {listTab === 'assigned'
+                      ? 'No leads assigned to you yet. When a teammate adds you under Assign to, they will appear here.'
+                      : 'No leads match this filter.'}
                   </td>
                 </tr>
               ) : (
@@ -471,7 +471,7 @@ export default function ManagementBoard() {
                     <tr key={lead.id} className="text-slate-300">
                       <td className="px-4 py-1 text-slate-400">{lead.clientName || '—'}</td>
                       <td className="px-4 py-1">
-                        <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-xs text-blue-300">
+                        <span className="rounded-full bg-[#3388AB]/20 px-2.5 py-0.5 text-xs text-[#3388AB]">
                           {statusLabelByValue.get(lead.status) ||
                             lead.status ||
                             'New'}
@@ -500,7 +500,7 @@ export default function ManagementBoard() {
                             <button
                               type="button"
                               onClick={() => setViewLead(lead)}
-                              className="rounded-lg border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 sm:px-3"
+                              className="rounded-lg border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 sm:px-3 cursor-pointer"
                               >
                                 View details
                               </button>
@@ -510,7 +510,7 @@ export default function ManagementBoard() {
                               type="button"
                               onClick={() => handleDelete(lead.id)}
                               disabled={deletingLeadId === lead.id}
-                              className="rounded-lg border border-red-800/40 px-4 py-1 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50"
+                              className="rounded-lg border border-red-800/40 px-4 py-1 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50 cursor-pointer"
                             >
                               {deletingLeadId === lead.id ? 'Deleting...' : 'Delete'}
                             </button>
@@ -536,8 +536,13 @@ export default function ManagementBoard() {
 
       {leadModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-2xl sm:p-6">
-            <h2 className="text-lg font-semibold text-white">New lead</h2>
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[#3388AB] bg-slate-900 p-4 shadow-2xl sm:p-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-semibold text-white">New lead</h2>
+              <button type="button" onClick={() => setLeadModalOpen(false)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 cursor-pointer">
+                <IconX size={20} color="#fff"/>
+              </button>
+            </div>
             <form onSubmit={saveLeadByManagement} className="mt-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-300">Date (Lead entry date)</label>
@@ -547,7 +552,7 @@ export default function ManagementBoard() {
                   onChange={(e) =>
                     setLeadForm((f) => ({ ...f, leadDate: e.target.value }))
                   }
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                  className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-950 px-3 py-2 text-white"
                 />
               </div>
               <div>
@@ -557,7 +562,7 @@ export default function ManagementBoard() {
                   onChange={(e) =>
                     setLeadForm((f) => ({ ...f, clientName: e.target.value }))
                   }
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                  className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-950 px-3 py-2 text-white"
                 />
               </div>
               <div>
@@ -567,7 +572,7 @@ export default function ManagementBoard() {
                   onChange={(e) =>
                     setLeadForm((f) => ({ ...f, phone: e.target.value }))
                   }
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                  className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-950 px-3 py-2 text-white"
                 />
               </div>
               <div>
@@ -577,7 +582,7 @@ export default function ManagementBoard() {
                   onChange={(e) =>
                     setLeadForm((f) => ({ ...f, email: e.target.value }))
                   }
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                  className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-950 px-3 py-2 text-white"
                 />
               </div>
               <div>
@@ -587,7 +592,7 @@ export default function ManagementBoard() {
                   onChange={(e) =>
                     setLeadForm((f) => ({ ...f, city: e.target.value }))
                   }
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                  className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-950 px-3 py-2 text-white"
                 />
               </div>
               <div>
@@ -597,7 +602,7 @@ export default function ManagementBoard() {
                   onChange={(e) =>
                     setLeadForm((f) => ({ ...f, productId: e.target.value }))
                   }
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                  className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-950 px-3 py-2 text-white"
                 >
                   <option value="">Select product</option>
                   {products.map((p) => (
@@ -615,7 +620,7 @@ export default function ManagementBoard() {
                   onChange={(e) =>
                     setLeadForm((f) => ({ ...f, description: e.target.value }))
                   }
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                  className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-950 px-3 py-2 text-white"
                 />
               </div>
               <div>
@@ -625,7 +630,7 @@ export default function ManagementBoard() {
                   onChange={(e) =>
                     setLeadForm((f) => ({ ...f, status: e.target.value }))
                   }
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                  className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-950 px-3 py-2 text-white"
                 >
                   {statusOptions.map((s) => (
                     <option key={s.value} value={s.value}>
@@ -645,7 +650,7 @@ export default function ManagementBoard() {
                       updatedStatusDate: e.target.value,
                     }))
                   }
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                  className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-950 px-3 py-2 text-white"
                 />
               </div>
               <div>
@@ -656,7 +661,7 @@ export default function ManagementBoard() {
                   onChange={(e) =>
                     setLeadForm((f) => ({ ...f, notes: e.target.value }))
                   }
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                  className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-950 px-3 py-2 text-white"
                 />
               </div>
               <div>
@@ -665,26 +670,26 @@ export default function ManagementBoard() {
                   <button
                     type="button"
                     onClick={() =>
-                      salesAssignees.length > 0 &&
+                      processAssignees.length > 0 &&
                       setAssigneeDropdownOpen((v) => !v)
                     }
-                    className="flex w-full items-center justify-between rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-left text-sm text-white disabled:opacity-60"
-                    disabled={salesAssignees.length === 0}
+                    className="flex w-full items-center justify-between rounded-lg border border-[#3388AB] bg-slate-950 px-3 py-2 text-left text-sm text-white disabled:opacity-60"
+                    disabled={processAssignees.length === 0}
                   >
                     <span className="truncate">
-                      {salesAssignees.length === 0
-                        ? 'No process users found'
+                      {processAssignees.length === 0
+                        ? 'No team members found'
                         : selectedAssignees.length === 0
-                          ? 'Select process users'
+                          ? 'Select assignees'
                           : `${selectedAssignees.length} selected`}
                     </span>
                     <span className="text-slate-400">
                       {assigneeDropdownOpen ? '▲' : '▼'}
                     </span>
                   </button>
-                  {assigneeDropdownOpen && salesAssignees.length > 0 && (
-                    <div className="absolute bottom-full left-0 z-20 mb-2 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-2 shadow-xl">
-                      {salesAssignees.map((u) => (
+                  {assigneeDropdownOpen && processAssignees.length > 0 && (
+                    <div className="absolute bottom-full left-0 z-20 mb-2 max-h-48 w-full overflow-y-auto rounded-lg border border-[#3388AB] bg-slate-900 p-2 shadow-xl">
+                      {processAssignees.map((u) => (
                         <label
                           key={u.uid}
                           className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
@@ -693,7 +698,7 @@ export default function ManagementBoard() {
                             type="checkbox"
                             checked={selectedAssignees.includes(u.uid)}
                             onChange={() => toggleAssignee(u.uid)}
-                            className="rounded border-slate-600 bg-slate-950 text-blue-600"
+                            className="rounded border-slate-600 bg-slate-950 text-[#3388AB]"
                           />
                           <span>{labelAssignableUser(u)}</span>
                         </label>
@@ -722,14 +727,14 @@ export default function ManagementBoard() {
                     })
                     setSelectedAssignees([])
                   }}
-                  className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
+                  className="rounded-lg border border-[#3388AB] px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={savingLead}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-[#3388AB] disabled:opacity-50"
+                  className="rounded-lg bg-[#3388AB] px-4 py-2 text-sm font-semibold text-white hover:bg-[#3388AB] disabled:opacity-50"
                 >
                   {savingLead ? 'Saving...' : 'Save lead'}
                 </button>

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { ROLES, ROLE_LABELS } from '../constants'
+import { REGISTERABLE_ROLES, ROLE_LABELS } from '../constants'
 
 export default function Register() {
   const { user, register } = useAuth()
@@ -9,7 +9,7 @@ export default function Register() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
-  const [role, setRole] = useState(ROLES.SALES)
+  const [role, setRole] = useState(REGISTERABLE_ROLES[1])
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -109,7 +109,7 @@ export default function Register() {
               onChange={(e) => setRole(e.target.value)}
               className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
             >
-              {Object.values(ROLES).map((r) => (
+              {REGISTERABLE_ROLES.map((r) => (
                 <option key={r} value={r}>
                   {ROLE_LABELS[r]}
                 </option>

@@ -1,22 +1,9 @@
-import { ROLES } from '../constants'
-import { useAuth } from '../context/AuthContext'
-import { usePartners } from '../hooks/usePartners'
 import { useProducts } from '../hooks/useProducts'
 import { useStatuses } from '../hooks/useStatuses'
 import { assignedUids } from '../lib/leads'
 
-export default function LeadDetailsModal({
-  lead,
-  usersById,
-  onClose,
-  showPartner = true,
-}) {
-  const { profile } = useAuth()
-  const role = String(profile?.role ?? '').trim().toLowerCase()
-  const isPartnerRole = role === ROLES.PARTNER
-
+export default function LeadDetailsModal({ lead, usersById, onClose }) {
   const { products } = useProducts()
-  const { partners } = usePartners()
   const { statuses } = useStatuses()
   if (!lead) return null
 
@@ -45,7 +32,6 @@ export default function LeadDetailsModal({
     ? assignees.map((uid) => userName(uid)).join(', ')
     : 'Unassigned'
   const productName = getProductName(lead.productId, products)
-  const partnerName = getPartnerName(lead.partnerId, lead.partnerName, partners)
 
   return (
     <div className="fixed inset-0 z-60 overflow-y-auto bg-black/60 p-3 backdrop-blur-sm sm:p-4">
@@ -69,14 +55,14 @@ export default function LeadDetailsModal({
             <Row label="Client Name" value={lead.clientName || '—'} />
             <Row label="Phone" value={lead.phone || '—'} />
             <Row label="Email" value={lead.email || '—'} />
+            <Row label="City" value={lead.city || '—'} />
             <Row label="Product" value={productName} />
             <Row label="Lead Owner" value={userName(lead.createdBy)} />
-            <Row label="Processed By" value={processedBy} />
+            <Row label="Assigned to" value={processedBy} />
             {salesAssignedBy ? (
               <Row label="Sales assigned" value={salesAssignedBy} />
             ) : null}
             <Row label="Status" value={statusLabel} />
-            <Row label="Date" value={lead.leadDate || '—'} />
             <Row
               label="Updated status date"
               value={lead.updatedStatusDate || '—'}
@@ -127,11 +113,3 @@ function getProductName(productId, products) {
   const item = products.find((p) => p.id === productId)
   return item?.name?.trim() || productId
 }
-
-function getPartnerName(partnerId, fallbackName, partners) {
-  if (fallbackName) return fallbackName
-  if (!partnerId) return 'N/A'
-  const item = partners.find((p) => p.id === partnerId)
-  return item?.name?.trim() || partnerId
-}
-

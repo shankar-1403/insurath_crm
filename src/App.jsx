@@ -6,11 +6,9 @@ import Login from './pages/Login'
 import HomeRedirect from './pages/HomeRedirect'
 import ManagementBoard from './pages/ManagementBoard'
 import SalesBoard from './pages/SalesBoard'
-import ProcessBoard from './pages/ProcessBoard'
 import AdminUsers from './pages/AdminUsers'
 import AdminProducts from './pages/AdminProducts'
 import AdminStatuses from './pages/AdminStatuses'
-import PartnerBoard from './pages/PartnerBoard'
 import { ROLES } from './constants'
 
 export default function App() {
@@ -61,26 +59,18 @@ export default function App() {
               }
             />
             <Route
+              path="management/assigned"
+              element={
+                <ProtectedRoute roles={[ROLES.MANAGEMENT]}>
+                  <ManagementBoard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="sales"
               element={
                 <ProtectedRoute roles={[ROLES.SALES]}>
                   <SalesBoard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="process"
-              element={
-                <ProtectedRoute roles={[ROLES.PROCESS]}>
-                  <ProcessBoard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="partner"
-              element={
-                <ProtectedRoute roles={[ROLES.PARTNER]}>
-                  <PartnerBoard />
                 </ProtectedRoute>
               }
             />

@@ -79,9 +79,8 @@ export default function ProfileGateMessage({
           <p className="text-center text-xs text-slate-500">
             <code className="text-slate-400">role</code> must be exactly{' '}
             <code className="text-slate-400">admin</code>,{' '}
-            <code className="text-slate-400">management</code>,{' '}
-            <code className="text-slate-400">sales</code>, or{' '}
-            <code className="text-slate-400">process</code>.
+            <code className="text-slate-400">management</code>, or{' '}
+            <code className="text-slate-400">sales</code>.
           </p>
         </div>
       )}
@@ -95,10 +94,9 @@ export default function ProfileGateMessage({
             Edit <code className="text-blue-300">users/{uid}</code> in the
             Realtime Database <strong>Data</strong> tab and add a string field{' '}
             <code className="text-blue-300">role</code>:{' '}
-              <code className="text-blue-300">admin</code>,{' '}
-            <code className="text-blue-300">management</code>,{' '}
-            <code className="text-blue-300">sales</code>, or{' '}
-            <code className="text-blue-300">process</code>.
+            <code className="text-blue-300">admin</code>,{' '}
+            <code className="text-blue-300">management</code>, or{' '}
+            <code className="text-blue-300">sales</code>.
           </p>
         </div>
       )}

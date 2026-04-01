@@ -40,7 +40,7 @@ export default function Login() {
           Sign in
         </h1>
         <p className="mt-1 text-center text-sm text-slate-400">
-          CRM — Management, Sales & Process
+          CRM — Admin, Management & Sales
         </p>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">

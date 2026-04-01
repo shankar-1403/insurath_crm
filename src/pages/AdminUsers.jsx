@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { push, ref, remove, set, update } from 'firebase/database'
+import { ref, remove, update } from 'firebase/database'
 import { httpsCallable } from 'firebase/functions'
 import { ROLE_LABELS, ROLES } from '../constants'
 import { useAuth } from '../context/AuthContext'
@@ -27,7 +26,6 @@ export default function AdminUsers() {
   const [editForm, setEditForm] = useState({
     displayName: '',
     role: ROLES.SALES,
-    partnerId: '',
   })
   const [editPassword, setEditPassword] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
@@ -53,33 +51,15 @@ export default function AdminUsers() {
       )
       return
     }
-    const r = String(role).trim().toLowerCase()
     const emailTrim = email.trim()
     const displayTrim = displayName.trim()
-    const partnerRecordName =
-      displayTrim || emailTrim.split('@')[0] || 'Partner'
     setSubmitting(true)
-    let newPartnerId = null
     try {
-      if (r === ROLES.PARTNER) {
-        const partnerRef = push(ref(db, 'partners'))
-        newPartnerId = partnerRef.key
-        await set(partnerRef, {
-          name: partnerRecordName,
-          createdAt: Date.now(),
-          createdByAdminUid: user?.uid ?? null,
-        })
-      }
-      const extra =
-        r === ROLES.PARTNER && newPartnerId
-          ? { partnerId: newPartnerId }
-          : {}
       const uid = await createUserByAdmin(
         emailTrim,
         password,
         displayTrim,
         role,
-        extra,
       )
       setMessage(`User created successfully. UID: ${uid}`)
       setEmail('')
@@ -87,9 +67,6 @@ export default function AdminUsers() {
       setDisplayName('')
       setRole(ROLES.SALES)
     } catch (err) {
-      if (newPartnerId) {
-        await remove(ref(db, `partners/${newPartnerId}`)).catch(() => {})
-      }
       setError(err?.message || 'Could not create user')
     } finally {
       setSubmitting(false)
@@ -144,7 +121,6 @@ export default function AdminUsers() {
     setEditForm({
       displayName: u?.displayName ?? '',
       role: String(u?.role ?? ROLES.SALES).trim().toLowerCase(),
-      partnerId: u?.partnerId ?? '',
     })
     setEditPassword('')
   }
@@ -161,27 +137,10 @@ export default function AdminUsers() {
 
     const nextRole = String(editForm.role ?? '').trim().toLowerCase()
     const nextDisplayName = String(editForm.displayName ?? '').trim()
-    let nextPartnerId = String(editForm.partnerId ?? '').trim()
     const nextPassword = String(editPassword ?? '').trim()
 
     setSavingEdit(true)
     try {
-      // If switching to partner without a partnerId, create a partner master row.
-      if (nextRole === ROLES.PARTNER && !nextPartnerId) {
-        const existing = usersById?.[editingUid]
-        const partnerRecordName =
-          nextDisplayName ||
-          String(existing?.email ?? '').split('@')[0] ||
-          'Partner'
-        const partnerRef = push(ref(db, 'partners'))
-        nextPartnerId = partnerRef.key
-        await set(partnerRef, {
-          name: partnerRecordName,
-          createdAt: Date.now(),
-          createdByAdminUid: user?.uid ?? null,
-        })
-      }
-
       if (nextPassword) {
         const updateUserPasswordByAdmin = httpsCallable(
           functions,
@@ -193,15 +152,9 @@ export default function AdminUsers() {
         })
       }
 
-      // If switching away from partner, clear partnerId.
-      if (nextRole !== ROLES.PARTNER) {
-        nextPartnerId = ''
-      }
-
       await update(ref(db, `users/${editingUid}`), {
         displayName: nextDisplayName,
         role: nextRole,
-        partnerId: nextPartnerId || null,
         updatedAt: Date.now(),
         updatedByAdminUid: user?.uid ?? null,
       })
@@ -232,9 +185,8 @@ export default function AdminUsers() {
           Admin creates user accounts and assigns the team role.
         </p>
         <p className="mt-1 text-xs text-slate-500">
-          Same form for every team: sales, process, management, or partner. Partner
-          accounts get the partner dashboard; a Partner master row is created
-          automatically from display name (or email) and linked to that login.
+          Create management or sales team accounts. Admin accounts are not created
+          from this form.
         </p>
       </div>
 
@@ -440,34 +392,6 @@ export default function AdminUsers() {
                   Password must be at least 6 characters if provided.
                 </p>
               </div>
-
-              {String(editForm.role).trim().toLowerCase() === ROLES.PARTNER && (
-                <div>
-                  <div className="flex items-center justify-between gap-3">
-                    <label className="block text-sm font-medium text-slate-300">
-                      Partner ID (optional)
-                    </label>
-                    <Link
-                      to="/admin/partners"
-                      className="text-xs text-blue-300 hover:underline"
-                    >
-                      Open Partner master
-                    </Link>
-                  </div>
-                  <input
-                    type="text"
-                    value={editForm.partnerId}
-                    onChange={(e) =>
-                      setEditForm((f) => ({ ...f, partnerId: e.target.value }))
-                    }
-                    placeholder="Leave blank to auto-create"
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs text-white"
-                  />
-                  <p className="mt-1 text-xs text-slate-500">
-                    If blank, a new partner record will be created automatically on save.
-                  </p>
-                </div>
-              )}
 
               {error && <p className="text-sm text-red-300">{error}</p>}
               {message && <p className="text-sm text-emerald-300">{message}</p>}

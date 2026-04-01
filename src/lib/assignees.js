@@ -1,6 +1,6 @@
 /**
- * Process-role users, plus the signed-in user as "Self" when they are not
- * already listed (e.g. sales or management handling processing for some leads).
+ * Sales and management users (for assignment), plus the signed-in user as
+ * "Self" when they are not already listed.
  */
 export function assignableProcessUsers(processUsers, currentUid, usersById) {
   if (!currentUid) return processUsers

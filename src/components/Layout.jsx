@@ -60,9 +60,23 @@ export default function Layout() {
                 </NavLink>
               )}
               {role === ROLES.MANAGEMENT && (
-                <NavLink to="/management" className={linkClass} onClick={closeMenu}>
-                  All leads
-                </NavLink>
+                <>
+                  <NavLink
+                    to="/management"
+                    end
+                    className={linkClass}
+                    onClick={closeMenu}
+                  >
+                    All leads
+                  </NavLink>
+                  <NavLink
+                    to="/management/assigned"
+                    className={linkClass}
+                    onClick={closeMenu}
+                  >
+                    Assigned leads
+                  </NavLink>
+                </>
               )}
               {role === ROLES.SALES && (
                 <NavLink to="/sales" className={linkClass} onClick={closeMenu}>
@@ -112,9 +126,23 @@ export default function Layout() {
                 </NavLink>
               )}
               {role === ROLES.MANAGEMENT && (
-                <NavLink to="/management" className={linkClass} onClick={closeMenu}>
-                  All leads
-                </NavLink>
+                <>
+                  <NavLink
+                    to="/management"
+                    end
+                    className={linkClass}
+                    onClick={closeMenu}
+                  >
+                    All leads
+                  </NavLink>
+                  <NavLink
+                    to="/management/assigned"
+                    className={linkClass}
+                    onClick={closeMenu}
+                  >
+                    Assigned leads
+                  </NavLink>
+                </>
               )}
               {role === ROLES.SALES && (
                 <NavLink to="/sales" className={linkClass} onClick={closeMenu}>
