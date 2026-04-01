@@ -59,6 +59,11 @@ export default function Layout() {
                   Status master
                 </NavLink>
               )}
+              {role === ROLES.ADMIN && (
+                <NavLink to="/admin/partners" className={linkClass} onClick={closeMenu}>
+                  Partner master
+                </NavLink>
+              )}
               {role === ROLES.MANAGEMENT && (
                 <>
                   <NavLink
@@ -123,6 +128,11 @@ export default function Layout() {
               {role === ROLES.ADMIN && (
                 <NavLink to="/admin/statuses" className={linkClass} onClick={closeMenu}>
                   Status master
+                </NavLink>
+              )}
+              {role === ROLES.ADMIN && (
+                <NavLink to="/admin/partners" className={linkClass} onClick={closeMenu}>
+                  Partner master
                 </NavLink>
               )}
               {role === ROLES.MANAGEMENT && (

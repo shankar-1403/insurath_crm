@@ -5,17 +5,20 @@ import { useAuth } from '../context/AuthContext'
 import { useLeads } from '../hooks/useLeads'
 import { useUsers } from '../hooks/useUsers'
 import { useProducts } from '../hooks/useProducts'
+import { usePartners } from '../hooks/usePartners'
 import { useStatuses } from '../hooks/useStatuses'
 import { assignedUids, toAssignedMap } from '../lib/leads'
 import { assignableProcessUsers, labelAssignableUser } from '../lib/assignees'
 import { downloadCsv, inDateRange } from '../lib/csv'
 import { resolveStatusLabel } from '../lib/statusLabel'
 import LeadDetailsModal from '../components/LeadDetailsModal'
+import TypeaheadMultiSelect from '../components/TypeaheadMultiSelect'
 import { IconX } from '@tabler/icons-react'
 
 const emptyLeadForm = {
   leadDate: '',
   clientName: '',
+  partnerId: '',
   phone: '',
   email: '',
   city: '',
@@ -26,11 +29,18 @@ const emptyLeadForm = {
   notes: '',
 }
 
+const emptyLeadFieldErrors = {
+  clientName: '',
+  status: '',
+  updatedStatusDate: '',
+}
+
 export default function SalesBoard() {
   const { user } = useAuth()
   const { leads, loading } = useLeads()
   const { usersById, processUsers, error: usersError } = useUsers()
   const { products } = useProducts()
+  const { partners } = usePartners()
   const { statuses } = useStatuses()
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -40,7 +50,13 @@ export default function SalesBoard() {
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false)
   const [savingLead, setSavingLead] = useState(false)
   const [formError, setFormError] = useState('')
+  const [leadFieldErrors, setLeadFieldErrors] = useState(emptyLeadFieldErrors)
   const [leadSearch, setLeadSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [salesOwnerFilter, setSalesOwnerFilter] = useState([])
+  const [assignedToFilter, setAssignedToFilter] = useState([])
+  const [productFilter, setProductFilter] = useState('')
+  const [partnerFilter, setPartnerFilter] = useState('')
   const [viewLead, setViewLead] = useState(null)
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
@@ -56,6 +72,35 @@ export default function SalesBoard() {
     })
   }, [leads, user?.uid])
 
+  const users = useMemo(
+    () => Object.entries(usersById).map(([uid, profile]) => ({ uid, ...profile })),
+    [usersById],
+  )
+
+  const allUsers = useMemo(
+    () =>
+      users
+        .filter((u) => {
+          const role = String(u?.role ?? '').trim().toLowerCase()
+          return role === 'management' || role === 'sales'
+        })
+        .sort((a, b) =>
+          String(a.displayName || a.email || '')
+            .toLowerCase()
+            .localeCompare(String(b.displayName || b.email || '').toLowerCase()),
+        ),
+    [users],
+  )
+
+  const allOwnerOptions = useMemo(
+    () =>
+      allUsers.map((u) => ({
+        id: u.uid,
+        label: u.displayName || u.email || u.uid.slice(0, 8),
+      })),
+    [allUsers],
+  )
+
   const processAssignees = useMemo(
     () => assignableProcessUsers(processUsers, user?.uid, usersById),
     [processUsers, user?.uid, usersById],
@@ -64,6 +109,9 @@ export default function SalesBoard() {
   const filteredMyLeads = useMemo(() => {
     const term = leadSearch.trim().toLowerCase()
     let list = salesVisibleLeads
+    if (statusFilter) {
+      list = list.filter((l) => l.status === statusFilter)
+    }
     if (term) {
       list = list.filter((l) => {
         const company = String(l.company ?? '').toLowerCase()
@@ -71,9 +119,33 @@ export default function SalesBoard() {
         return company.includes(term) || clientName.includes(term)
       })
     }
+    if (salesOwnerFilter.length) {
+      list = list.filter((l) => salesOwnerFilter.includes(l.createdBy))
+    }
+    if (assignedToFilter.length) {
+      list = list.filter((l) =>
+        assignedUids(l.assignedTo).some((uid) => assignedToFilter.includes(uid)),
+      )
+    }
+    if (productFilter) {
+      list = list.filter((l) => l.productId === productFilter)
+    }
+    if (partnerFilter) {
+      list = list.filter((l) => (l.partnerId || '') === partnerFilter)
+    }
     list = list.filter((l) => inDateRange(l.leadDate || '', fromDate, toDate))
     return list
-  }, [salesVisibleLeads, leadSearch, fromDate, toDate])
+  }, [
+    salesVisibleLeads,
+    statusFilter,
+    leadSearch,
+    salesOwnerFilter,
+    assignedToFilter,
+    productFilter,
+    partnerFilter,
+    fromDate,
+    toDate,
+  ])
 
   const statusOptions = useMemo(() => {
     return [
@@ -109,12 +181,29 @@ export default function SalesBoard() {
     return product?.name || productId
   }
 
+  function sourceNameFor(partnerId, createdBy) {
+    if (!partnerId || partnerId === 'self') {
+      const u = usersById[createdBy]
+
+      const name =
+        u?.displayName ||
+        u?.email ||
+        createdBy?.slice(0, 8)
+
+      return `${name}`
+    }
+
+    const p = partners.find((item) => item.id === partnerId)
+    return p?.name || partnerId
+  }
+
   function openNew() {
     setEditingId(null)
     setLeadForm(emptyLeadForm)
     setSelectedAssignees([])
     setAssigneeDropdownOpen(false)
     setFormError('')
+    setLeadFieldErrors(emptyLeadFieldErrors)
     setModalOpen(true)
   }
 
@@ -123,6 +212,7 @@ export default function SalesBoard() {
     setLeadForm({
       leadDate: lead.leadDate ?? '',
       clientName: lead.clientName ?? '',
+      partnerId: lead.partnerId ?? '',
       phone: lead.phone ?? '',
       email: lead.email ?? '',
       city: lead.city ?? '',
@@ -135,6 +225,7 @@ export default function SalesBoard() {
     setSelectedAssignees(assignedUids(lead.assignedTo))
     setAssigneeDropdownOpen(false)
     setFormError('')
+    setLeadFieldErrors(emptyLeadFieldErrors)
     setModalOpen(true)
   }
 
@@ -147,12 +238,26 @@ export default function SalesBoard() {
   async function saveLead(e) {
     e.preventDefault()
     if (!user) return
-    setSavingLead(true)
     setFormError('')
+    if (!editingId) {
+      const errs = {
+        clientName: !leadForm.clientName.trim() ? 'Client name is required.' : '',
+        status: !leadForm.status ? 'Status is required.' : '',
+        updatedStatusDate: !leadForm.updatedStatusDate
+          ? 'Updated status date is required.'
+          : '',
+      }
+      setLeadFieldErrors(errs)
+      if (errs.clientName || errs.status || errs.updatedStatusDate) return
+    } else {
+      setLeadFieldErrors(emptyLeadFieldErrors)
+    }
+    setSavingLead(true)
     try {
       const payload = {
         leadDate: leadForm.leadDate || '',
         clientName: leadForm.clientName.trim(),
+        partnerId: leadForm.partnerId || null,
         phone: leadForm.phone.trim(),
         email: leadForm.email.trim(),
         city: leadForm.city.trim(),
@@ -180,6 +285,7 @@ export default function SalesBoard() {
       setAssigneeDropdownOpen(false)
       setModalOpen(false)
       setEditingId(null)
+      setLeadFieldErrors(emptyLeadFieldErrors)
     } catch (err) {
       setFormError(err?.message || 'Could not save lead.')
     } finally {
@@ -227,15 +333,145 @@ export default function SalesBoard() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-white">My leads</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Leads you create and leads assigned to you (including from management).
-          </p>
+      <div className="flex flex-col gap-4">
+        <div className="flex justify-between items-end">
+          <div>
+            <h1 className="text-2xl font-semibold text-white">My leads</h1>
+            <p className="mt-1 text-sm text-slate-400">
+              Leads you create and leads assigned to you (including from management).
+            </p>
+          </div>
+          
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={openNew}
+              className="w-full rounded-lg bg-[#3388AB] px-4 py-2 border border-[#3388AB] text-sm font-semibold text-white hover:bg-[#3388AB] cursor-pointer"
+            >
+              New lead
+            </button>
+          </div>
         </div>
-        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-end sm:gap-4">
-          <div className="w-full sm:w-65">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div>
+            <label
+              htmlFor="status-filter"
+              className="block text-xs font-medium uppercase tracking-wide text-slate-500"
+            >
+              Filter by status
+            </label>
+            <select
+              id="status-filter"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-900 px-3 py-2 text-sm text-white"
+            >
+              <option value="">All statuses</option>
+              {statusOptions.filter((s) => s.value).map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="sales-owner-filter" className="block text-xs font-medium uppercase tracking-wide text-slate-500">Lead Holder</label>
+            <TypeaheadMultiSelect
+              id="sales-owner-filter"
+              label={null}
+              placeholder="Type sales owner..."
+              options={allOwnerOptions}
+              selectedIds={salesOwnerFilter}
+              onChangeSelectedIds={setSalesOwnerFilter}
+            />
+          </div>
+          <div>
+            <label htmlFor="assigned-to-filter" className="block text-xs font-medium uppercase tracking-wide text-slate-500">Assigned To</label>
+            <TypeaheadMultiSelect
+              id="assigned-to-filter"
+              label={null}
+              placeholder="Type assignee..."
+              options={allOwnerOptions}
+              selectedIds={assignedToFilter}
+              onChangeSelectedIds={setAssignedToFilter}
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="product-filter"
+              className="block text-xs font-medium uppercase tracking-wide text-slate-500"
+            >
+              Product
+            </label>
+            <select
+              id="product-filter"
+              value={productFilter}
+              onChange={(e) => setProductFilter(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-900 px-3 py-2 text-sm text-white"
+            >
+              <option value="">All products</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name || p.id}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label
+              htmlFor="partner-filter"
+              className="block text-xs font-medium uppercase tracking-wide text-slate-500"
+            >
+              Source
+            </label>
+            <select
+              id="partner-filter"
+              value={partnerFilter}
+              onChange={(e) => setPartnerFilter(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-900 px-3 py-2 text-sm text-white"
+            >
+              <option value="">Select Source</option>
+              {partners.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name || p.id}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium uppercase tracking-wide text-slate-500">
+              From
+            </label>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-900/40 px-3 py-2 text-sm text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium uppercase tracking-wide text-slate-500">
+              To
+            </label>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-900/40 px-3 py-2 text-sm text-white"
+            />
+          </div>
+          <div className="col-span-1"></div>
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="w-full rounded-lg border border-green-800 bg-green-800/20 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-green-800/10 cursor-pointer"
+            >
+              Export CSV
+            </button>
+          </div>
+          <div className="w-full">
             <label
               htmlFor="search-client"
               className="block text-xs font-medium uppercase tracking-wide text-slate-500"
@@ -251,47 +487,6 @@ export default function SalesBoard() {
               className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-900/40 px-3 py-2 text-sm text-white placeholder:text-slate-500 outline-none focus:border-[#3388AB] focus:ring-2 focus:ring-[#3388AB]/30"
             />
           </div>
-
-          <div className="w-full sm:w-auto">
-            <label className="block text-xs font-medium uppercase tracking-wide text-slate-500">
-              From
-            </label>
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-900/40 px-3 py-2 text-sm text-white"
-            />
-          </div>
-          <div className="w-full sm:w-auto">
-            <label className="block text-xs font-medium uppercase tracking-wide text-slate-500">
-              To
-            </label>
-            <input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-900/40 px-3 py-2 text-sm text-white"
-            />
-          </div>
-          <div>
-            <button
-              type="button"
-              onClick={exportCsv}
-              className="rounded-lg border border-green-800 bg-green-800/20 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-green-800/10 cursor-pointer"
-            >
-              Export CSV
-            </button>
-          </div>
-          <div>
-            <button
-              type="button"
-              onClick={openNew}
-              className="rounded-lg bg-[#3388AB] px-4 py-2 border border-[#3388AB] text-sm font-semibold text-white hover:bg-[#3388AB] cursor-pointer"
-            >
-              New lead
-            </button>
-          </div>
         </div>
       </div>
 
@@ -302,6 +497,7 @@ export default function SalesBoard() {
               <tr>
                 <th className="px-4 py-2 font-medium">Client</th>
                 <th className="px-4 py-2 font-medium">Status</th>
+                <th className="px-4 py-2 font-medium">Source</th>
                 <th className="px-4 py-2 font-medium">Product</th>
                 <th className="px-4 py-2 font-medium">Lead Owner</th>
                 <th className="px-4 py-2 font-medium">Assigned to</th>
@@ -313,7 +509,7 @@ export default function SalesBoard() {
             <tbody className="divide-y divide-slate-800">
               {filteredMyLeads.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
                     No leads yet. Create one with New lead, or ask management to assign you
                     on a lead.
                   </td>
@@ -327,6 +523,7 @@ export default function SalesBoard() {
                         {statusLabelByValue.get(lead.status) || lead.status || '—'}
                       </span>
                     </td>
+                    <td className="px-4 py-1 text-slate-400">{sourceNameFor(lead?.partnerId, lead?.createdBy)}</td>
                     <td className="px-4 py-1 text-slate-400">{productNameFor(lead.productId)}</td>
                     <td className="px-4 py-1 text-slate-400">{nameFor(lead.createdBy)}</td>
                     <td className="px-4 py-1 text-xs text-slate-400">{assigneeNames(lead.assignedTo)}</td>
@@ -379,7 +576,15 @@ export default function SalesBoard() {
               <h2 className="text-lg font-semibold text-white">
                 {editingId ? 'Edit lead' : 'New lead'}
               </h2>
-              <button type="button" onClick={() => setModalOpen(false)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 cursor-pointer">
+              <button
+                type="button"
+                onClick={() => {
+                  setModalOpen(false)
+                  setLeadFieldErrors(emptyLeadFieldErrors)
+                  setFormError('')
+                }}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 cursor-pointer"
+              >
                 <IconX size={20} color="#fff"/>
               </button>
             </div>
@@ -399,11 +604,48 @@ export default function SalesBoard() {
                 <label className="block text-sm font-medium text-slate-300">Name</label>
                 <input
                   value={leadForm.clientName}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setLeadForm((f) => ({ ...f, clientName: e.target.value }))
+                    if (!editingId && leadFieldErrors.clientName) {
+                      setLeadFieldErrors((prev) => ({ ...prev, clientName: '' }))
+                    }
+                  }}
+                  className={`mt-1 w-full rounded-lg border bg-slate-950 px-3 py-2 text-white ${
+                    !editingId && leadFieldErrors.clientName
+                      ? 'border-red-500/60'
+                      : 'border-[#3388AB]'
+                  }`}
+                />
+                {!editingId && leadFieldErrors.clientName && (
+                  <p className="mt-1 text-xs text-red-300">{leadFieldErrors.clientName}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300">Source</label>
+                <select
+                  value={leadForm.partnerId}
+                  onChange={(e) =>
+                    setLeadForm((f) => ({ ...f, partnerId: e.target.value }))
                   }
                   className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-950 px-3 py-2 text-white"
-                />
+                >
+                  <option value="self">
+                    {(() => {
+                      const currentUser = usersById[user?.uid]
+                      const name =
+                        currentUser?.displayName ||
+                        currentUser?.email ||
+                        user?.uid?.slice(0, 8)
+
+                      return `${name} (self)`
+                    })()}
+                  </option>
+                  {partners.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name || p.id}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300">Phone</label>
@@ -469,10 +711,17 @@ export default function SalesBoard() {
                 <label className="block text-sm font-medium text-slate-300">Status</label>
                 <select
                   value={leadForm.status}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setLeadForm((f) => ({ ...f, status: e.target.value }))
-                  }
-                  className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-950 px-3 py-2 text-white"
+                    if (!editingId && leadFieldErrors.status) {
+                      setLeadFieldErrors((prev) => ({ ...prev, status: '' }))
+                    }
+                  }}
+                  className={`mt-1 w-full rounded-lg border bg-slate-950 px-3 py-2 text-white ${
+                    !editingId && leadFieldErrors.status
+                      ? 'border-red-500/60'
+                      : 'border-[#3388AB]'
+                  }`}
                 >
                   {statusOptions.map((s) => (
                     <option key={s.value} value={s.value}>
@@ -480,20 +729,33 @@ export default function SalesBoard() {
                     </option>
                   ))}
                 </select>
+                {!editingId && leadFieldErrors.status && (
+                  <p className="mt-1 text-xs text-red-300">{leadFieldErrors.status}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300">Status date</label>
                 <input
                   type="date"
                   value={leadForm.updatedStatusDate}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setLeadForm((f) => ({
                       ...f,
                       updatedStatusDate: e.target.value,
                     }))
-                  }
-                  className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-950 px-3 py-2 text-white"
+                    if (!editingId && leadFieldErrors.updatedStatusDate) {
+                      setLeadFieldErrors((prev) => ({ ...prev, updatedStatusDate: '' }))
+                    }
+                  }}
+                  className={`mt-1 w-full rounded-lg border bg-slate-950 px-3 py-2 text-white ${
+                    !editingId && leadFieldErrors.updatedStatusDate
+                      ? 'border-red-500/60'
+                      : 'border-[#3388AB]'
+                  }`}
                 />
+                {!editingId && leadFieldErrors.updatedStatusDate && (
+                  <p className="mt-1 text-xs text-red-300">{leadFieldErrors.updatedStatusDate}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300">Notes</label>
@@ -565,6 +827,7 @@ export default function SalesBoard() {
                     setLeadForm(emptyLeadForm)
                     setSelectedAssignees([])
                     setEditingId(null)
+                    setLeadFieldErrors(emptyLeadFieldErrors)
                   }}
                   className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
                 >
