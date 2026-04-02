@@ -13,12 +13,13 @@ import { downloadCsv, inDateRange } from '../lib/csv'
 import { resolveStatusLabel } from '../lib/statusLabel'
 import LeadDetailsModal from '../components/LeadDetailsModal'
 import TypeaheadMultiSelect from '../components/TypeaheadMultiSelect'
+import TypeaheadSelect from '../components/TypeaheadSelect'
 import { IconX } from '@tabler/icons-react'
 
 const emptyLeadForm = {
   leadDate: '',
   clientName: '',
-  partnerId: '',
+  partnerId: 'self',
   phone: '',
   email: '',
   city: '',
@@ -131,7 +132,12 @@ export default function SalesBoard() {
       list = list.filter((l) => l.productId === productFilter)
     }
     if (partnerFilter) {
-      list = list.filter((l) => (l.partnerId || '') === partnerFilter)
+      list = list.filter((l) => {
+        const pid = l.partnerId
+        const isSelf = !pid || pid === 'self'
+        if (partnerFilter === 'self') return isSelf
+        return pid === partnerFilter
+      })
     }
     list = list.filter((l) => inDateRange(l.leadDate || '', fromDate, toDate))
     return list
@@ -183,19 +189,31 @@ export default function SalesBoard() {
 
   function sourceNameFor(partnerId, createdBy) {
     if (!partnerId || partnerId === 'self') {
-      const u = usersById[createdBy]
-
-      const name =
-        u?.displayName ||
-        u?.email ||
-        createdBy?.slice(0, 8)
-
-      return `${name}`
+      return `Self (${nameFor(createdBy)})`
     }
-
     const p = partners.find((item) => item.id === partnerId)
     return p?.name || partnerId
   }
+
+  function partnerPosIdFor(partnerId) {
+    if (!partnerId || partnerId === 'self') return '—'
+    const p = partners.find((item) => item.id === partnerId)
+    return p?.posId ?? p?.pos_id ?? '—'
+  }
+
+  const partnerOptions = useMemo(() => {
+    const currentUser = usersById[user?.uid]
+    const currentName =
+      currentUser?.displayName || currentUser?.email || user?.uid?.slice(0, 8) || 'Self'
+
+    return [
+      { id: 'self', label: `${currentName} (self)` },
+      ...partners.map((p) => ({
+        id: p.id,
+        label: [p.name || p.id, p.posId || p.pos_id].filter(Boolean).join(' · '),
+      })),
+    ]
+  }, [partners, user?.uid, usersById])
 
   function openNew() {
     setEditingId(null)
@@ -212,7 +230,8 @@ export default function SalesBoard() {
     setLeadForm({
       leadDate: lead.leadDate ?? '',
       clientName: lead.clientName ?? '',
-      partnerId: lead.partnerId ?? '',
+      partnerId:
+        lead.partnerId && lead.partnerId !== 'self' ? lead.partnerId : 'self',
       phone: lead.phone ?? '',
       email: lead.email ?? '',
       city: lead.city ?? '',
@@ -257,7 +276,7 @@ export default function SalesBoard() {
       const payload = {
         leadDate: leadForm.leadDate || '',
         clientName: leadForm.clientName.trim(),
-        partnerId: leadForm.partnerId || null,
+        partnerId: leadForm.partnerId || 'self',
         phone: leadForm.phone.trim(),
         email: leadForm.email.trim(),
         city: leadForm.city.trim(),
@@ -308,6 +327,8 @@ export default function SalesBoard() {
         lead.city || '',
         resolveStatusLabel(lead.status, statuses),
         lead.updatedStatusDate || '',
+        sourceNameFor(lead.partnerId, lead.createdBy),
+        partnerPosIdFor(lead.partnerId),
         productNameFor(lead.productId),
         nameFor(lead.createdBy),
         assigneeNames(lead.assignedTo),
@@ -323,6 +344,8 @@ export default function SalesBoard() {
         'City',
         'Status',
         'Updated Status Date',
+        'Source',
+        'Partner POS ID',
         'Product',
         'Lead Holder',
         'Assigned To',
@@ -430,10 +453,11 @@ export default function SalesBoard() {
               onChange={(e) => setPartnerFilter(e.target.value)}
               className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-900 px-3 py-2 text-sm text-white"
             >
-              <option value="">Select Source</option>
+              <option value="">All sources</option>
+              <option value="self">Self</option>
               {partners.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name || p.id}
+                  {[p.name || p.id, p.posId || p.pos_id].filter(Boolean).join(' · ')}
                 </option>
               ))}
             </select>
@@ -523,7 +547,11 @@ export default function SalesBoard() {
                         {statusLabelByValue.get(lead.status) || lead.status || '—'}
                       </span>
                     </td>
-                    <td className="px-4 py-1 text-slate-400">{sourceNameFor(lead?.partnerId, lead?.createdBy)}</td>
+                    <td className="px-4 py-1 text-slate-400">
+                      {[partnerPosIdFor(lead?.partnerId), sourceNameFor(lead?.partnerId, lead?.createdBy)]
+                        .filter((v) => v && v !== '—')
+                        .join(' · ') || '—'}
+                    </td>
                     <td className="px-4 py-1 text-slate-400">{productNameFor(lead.productId)}</td>
                     <td className="px-4 py-1 text-slate-400">{nameFor(lead.createdBy)}</td>
                     <td className="px-4 py-1 text-xs text-slate-400">{assigneeNames(lead.assignedTo)}</td>
@@ -601,7 +629,7 @@ export default function SalesBoard() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300">Name</label>
+                <label className="block text-sm font-medium text-slate-300">Name *</label>
                 <input
                   value={leadForm.clientName}
                   onChange={(e) => {
@@ -622,30 +650,15 @@ export default function SalesBoard() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300">Source</label>
-                <select
-                  value={leadForm.partnerId}
-                  onChange={(e) =>
-                    setLeadForm((f) => ({ ...f, partnerId: e.target.value }))
+                <TypeaheadSelect
+                  id="lead-partner"
+                  options={partnerOptions}
+                  selectedId={leadForm.partnerId}
+                  onChangeSelectedId={(partnerId) =>
+                    setLeadForm((f) => ({ ...f, partnerId }))
                   }
-                  className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-950 px-3 py-2 text-white"
-                >
-                  <option value="self">
-                    {(() => {
-                      const currentUser = usersById[user?.uid]
-                      const name =
-                        currentUser?.displayName ||
-                        currentUser?.email ||
-                        user?.uid?.slice(0, 8)
-
-                      return `${name} (self)`
-                    })()}
-                  </option>
-                  {partners.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name || p.id}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Type partner name / POS ID…"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300">Phone</label>
@@ -708,7 +721,7 @@ export default function SalesBoard() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300">Status</label>
+                <label className="block text-sm font-medium text-slate-300">Status *</label>
                 <select
                   value={leadForm.status}
                   onChange={(e) => {
@@ -734,7 +747,7 @@ export default function SalesBoard() {
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300">Status date</label>
+                <label className="block text-sm font-medium text-slate-300">Status date *</label>
                 <input
                   type="date"
                   value={leadForm.updatedStatusDate}

@@ -7,13 +7,14 @@ import { useProducts } from '../hooks/useProducts'
 import { usePartners } from '../hooks/usePartners'
 import { useStatuses } from '../hooks/useStatuses'
 import { useUsers } from '../hooks/useUsers'
-import { assignedUids, toAssignedMap, holderUids } from '../lib/leads'
+import { assignedUids, holderUids, toAssignedMap } from '../lib/leads'
 import { assignableProcessUsers, labelAssignableUser} from '../lib/assignees'
 import { downloadCsv, inDateRange } from '../lib/csv'
 import { resolveStatusLabel } from '../lib/statusLabel'
 import { db } from '../lib/firebase'
 import LeadDetailsModal from '../components/LeadDetailsModal'
 import TypeaheadMultiSelect from '../components/TypeaheadMultiSelect'
+import TypeaheadSelect from '../components/TypeaheadSelect'
 import { IconX } from '@tabler/icons-react'
 
 const emptyLeadForm = {
@@ -144,13 +145,14 @@ export default function ManagementBoard({ listTabOverride }) {
     const term = leadSearch.trim().toLowerCase()
     let list = leads
     if (listTab === 'assigned' && user?.uid) {
+      // Show leads assigned to the user, plus leads they created (even if left unassigned).
       list = list.filter((l) => {
-        if (!l.createdBy) return false
+        if (assignedUids(l.assignedTo).includes(user.uid)) return true
+        if (l.createdBy === user.uid) return true
+        // Back-compat in case older records stored createdBy as a map/array.
         return holderUids(l.createdBy).includes(user.uid)
       })
     }
-    console.log(list)
-
     if (statusFilter) {
       list = list.filter((l) => l.status === statusFilter)
     }
@@ -171,7 +173,12 @@ export default function ManagementBoard({ listTabOverride }) {
     }
     
     if (partnerFilter) {
-      list = list.filter((l) => (l.partnerId || '') === partnerFilter)
+      list = list.filter((l) => {
+        const pid = l.partnerId
+        const isSelf = !pid || pid === 'self'
+        if (partnerFilter === 'self') return isSelf
+        return pid === partnerFilter
+      })
     }
 
     if (productFilter) {
@@ -210,8 +217,6 @@ export default function ManagementBoard({ listTabOverride }) {
     sortOrder,
   ])
 
-  console.log(filtered);
-
   function nameFor(uid) {
     const u = usersById[uid]
     return u?.displayName || u?.email || uid.slice(0, 8)
@@ -225,19 +230,31 @@ export default function ManagementBoard({ listTabOverride }) {
 
   function sourceNameFor(partnerId, createdBy) {
     if (!partnerId || partnerId === 'self') {
-      const u = usersById[createdBy]
-
-      const name =
-        u?.displayName ||
-        u?.email ||
-        createdBy?.slice(0, 8)
-
-      return `${name}`
+      return `${nameFor(createdBy)}`
     }
-
     const p = partners.find((item) => item.id === partnerId)
     return p?.name || partnerId
   }
+
+  function partnerPosIdFor(partnerId) {
+    if (!partnerId || partnerId === 'self') return '—'
+    const p = partners.find((item) => item.id === partnerId)
+    return p?.posId ?? p?.pos_id ?? '—'
+  }
+
+  const partnerOptions = useMemo(() => {
+    const currentUser = usersById[user?.uid]
+    const currentName =
+      currentUser?.displayName || currentUser?.email || user?.uid?.slice(0, 8) || 'Self'
+
+    return [
+      { id: 'self', label: `${currentName} (self)` },
+      ...partners.map((p) => ({
+        id: p.id,
+        label: [p.name || p.id, p.posId || p.pos_id].filter(Boolean).join(' · '),
+      })),
+    ]
+  }, [partners, user?.uid, usersById])
 
   function toggleAssignee(uid) {
     setSelectedAssignees((prev) =>
@@ -296,10 +313,14 @@ export default function ManagementBoard({ listTabOverride }) {
     }
     setSavingLead(true)
     try {
+      const normalizedPartnerId =
+        leadForm.partnerId && leadForm.partnerId !== 'self'
+          ? leadForm.partnerId
+          : null
       const payload = {
         leadDate: leadForm.leadDate || '',
         clientName: leadForm.clientName.trim(),
-        partnerId: leadForm.partnerId || 'self',
+        partnerId: normalizedPartnerId,
         phone: leadForm.phone.trim(),
         email: leadForm.email.trim(),
         city: leadForm.city.trim(),
@@ -307,7 +328,7 @@ export default function ManagementBoard({ listTabOverride }) {
         status: leadForm.status || '',
         updatedStatusDate: leadForm.updatedStatusDate || '',
         notes: leadForm.notes,
-        assignedTo: toAssignedMap(selectedAssignees.length ? selectedAssignees : [user.uid]),
+        assignedTo: selectedAssignees.length ? toAssignedMap(selectedAssignees) : null,
         productId: leadForm.productId || null,
         updatedAt: Date.now(),
       }
@@ -342,6 +363,8 @@ export default function ManagementBoard({ listTabOverride }) {
         lead.city || '',
         resolveStatusLabel(lead.status, statuses),
         lead.updatedStatusDate || '',
+        sourceNameFor(lead.partnerId, lead.createdBy),
+        partnerPosIdFor(lead.partnerId),
         productNameFor(lead.productId),
         nameFor(lead.createdBy),
         assignedUids(lead.assignedTo).map((uid) => nameFor(uid)).join(', '),
@@ -359,6 +382,8 @@ export default function ManagementBoard({ listTabOverride }) {
         'City',
         'Status',
         'Updated Status Date',
+        'Source',
+        'Partner POS ID',
         'Product',
         'Lead Holder',
         'Assigned To',
@@ -392,6 +417,16 @@ export default function ManagementBoard({ listTabOverride }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4">
+        {message && (
+          <div className="rounded-xl border border-emerald-800/60 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200">
+            {message}
+          </div>
+        )}
+        {formError && (
+          <div className="rounded-xl border border-red-800/60 bg-red-950/30 px-4 py-3 text-sm text-red-200">
+            {formError}
+          </div>
+        )}
         <div className="flex justify-between gap-4">
           <div className="min-w-0 flex-1">
             <h1 className="text-2xl font-semibold text-white">
@@ -495,11 +530,11 @@ export default function ManagementBoard({ listTabOverride }) {
               onChange={(e) => setPartnerFilter(e.target.value)}
               className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-900 px-3 py-2 text-sm text-white"
             >
-              <option value="">Select source</option>
+              <option value="">All sources</option>
               <option value="self">Self</option>
               {partners.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name || p.id}
+                  {[p.name || p.id, p.posId || p.pos_id].filter(Boolean).join(' · ')}
                 </option>
               ))}
             </select>
@@ -574,7 +609,7 @@ export default function ManagementBoard({ listTabOverride }) {
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={9}
                     className="px-4 py-10 text-center text-slate-500"
                   >
                     {listTab === 'assigned'
@@ -596,7 +631,9 @@ export default function ManagementBoard({ listTabOverride }) {
                         </span>
                       </td>
                       <td className="px-4 py-1 text-slate-400">
-                        {sourceNameFor(lead?.partnerId, lead?.createdBy)}
+                        {[partnerPosIdFor(lead?.partnerId), sourceNameFor(lead?.partnerId, lead?.createdBy)]
+                          .filter((v) => v && v !== '—')
+                          .join(' · ') || '—'}
                       </td>
                       <td className="px-4 py-1 text-slate-400">
                         {productNameFor(lead?.productId)}
@@ -700,7 +737,7 @@ export default function ManagementBoard({ listTabOverride }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300">Name</label>
+                <label className="block text-sm font-medium text-slate-300">Name *</label>
                 <input
                   value={leadForm.clientName}
                   onChange={(e) => {
@@ -721,30 +758,15 @@ export default function ManagementBoard({ listTabOverride }) {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300">Source</label>
-                <select
-                  value={leadForm.partnerId}
-                  onChange={(e) =>
-                    setLeadForm((f) => ({ ...f, partnerId: e.target.value }))
+                <TypeaheadSelect
+                  id="lead-partner"
+                  options={partnerOptions}
+                  selectedId={leadForm.partnerId}
+                  onChangeSelectedId={(partnerId) =>
+                    setLeadForm((f) => ({ ...f, partnerId }))
                   }
-                  className="mt-1 w-full rounded-lg border border-[#3388AB] bg-slate-950 px-3 py-2 text-white"
-                >
-                  <option value="self">
-                    {(() => {
-                      const currentUser = usersById[user?.uid]
-                      const name =
-                        currentUser?.displayName ||
-                        currentUser?.email ||
-                        user?.uid?.slice(0, 8)
-
-                      return `${name} (self)`
-                    })()}
-                  </option>
-                  {partners.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name || p.id}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Type partner name / POS ID…"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300">Phone</label>
@@ -805,7 +827,7 @@ export default function ManagementBoard({ listTabOverride }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300">Status</label>
+                <label className="block text-sm font-medium text-slate-300">Status *</label>
                 <select
                   value={leadForm.status}
                   onChange={(e) => {
@@ -831,7 +853,7 @@ export default function ManagementBoard({ listTabOverride }) {
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300">Status Date</label>
+                <label className="block text-sm font-medium text-slate-300">Status Date *</label>
                 <input
                   type="date"
                   value={leadForm.updatedStatusDate}

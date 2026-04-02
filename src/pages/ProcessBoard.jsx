@@ -128,11 +128,22 @@ export default function ProcessBoard() {
     }
   }
 
-  function partnerNameFor(partnerId, fallbackName = '') {
+  function partnerNameFor(partnerId, fallbackName = '', createdBy) {
     if (fallbackName) return fallbackName
-    if (!partnerId) return '—'
+    if (!partnerId || partnerId === 'self') {
+      const u = createdBy ? usersById[createdBy] : null
+      return u
+        ? `Self (${u.displayName || u.email || createdBy.slice(0, 8)})`
+        : 'Self'
+    }
     const p = partners.find((item) => item.id === partnerId)
     return p?.name || partnerId
+  }
+
+  function partnerPosIdFor(partnerId) {
+    if (!partnerId || partnerId === 'self') return '—'
+    const p = partners.find((item) => item.id === partnerId)
+    return p?.posId ?? p?.pos_id ?? '—'
   }
 
   const currentUserName = user?.uid
@@ -177,7 +188,8 @@ export default function ProcessBoard() {
     const rows = filteredAssignedToMe
       .filter((lead) => inDateRange(lead.leadDate || '', fromDate, toDate))
       .map((lead) => [
-        partnerNameFor(lead.partnerId, lead.partnerName),
+        partnerNameFor(lead.partnerId, lead.partnerName, lead.createdBy),
+        partnerPosIdFor(lead.partnerId),
         lead.company || '',
         lead.clientName || '',
         lead.location || '',
@@ -196,6 +208,7 @@ export default function ProcessBoard() {
       'process-leads.csv',
       [
         'Partner',
+        'Partner POS ID',
         'Company',
         'Client Name',
         'Location',
@@ -277,6 +290,7 @@ export default function ProcessBoard() {
             <thead className="border-b border-slate-800 bg-slate-900/80 text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-2 font-medium whitespace-nowrap">Partner</th>
+                <th className="px-4 py-2 font-medium whitespace-nowrap">Partner POS ID</th>
                 <th className="px-4 py-2 font-medium whitespace-nowrap">Company</th>
                 <th className="px-4 py-2 font-medium whitespace-nowrap">Client name</th>
                 <th className="px-4 py-2 font-medium whitespace-nowrap">Location</th>
@@ -292,7 +306,7 @@ export default function ProcessBoard() {
             <tbody className="divide-y divide-slate-800">
               {filteredAssignedToMe.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={12} className="px-4 py-10 text-center text-slate-500">
                     No leads assigned to you yet.
                   </td>
                 </tr>
@@ -300,7 +314,10 @@ export default function ProcessBoard() {
                 filteredAssignedToMe.map((lead) => (
                   <tr key={lead.id} className="text-slate-300">
                     <td className="px-4 py-1 text-slate-400">
-                      {partnerNameFor(lead.partnerId, lead.partnerName)}
+                      {partnerNameFor(lead.partnerId, lead.partnerName, lead.createdBy)}
+                    </td>
+                    <td className="px-4 py-1 text-slate-400">
+                      {partnerPosIdFor(lead.partnerId)}
                     </td>
                     <td className="px-4 py-1 text-slate-400">{lead.company || '—'}</td>
                     <td className="px-4 py-1 text-slate-400">{lead.clientName || '—'}</td>
